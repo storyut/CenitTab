@@ -227,8 +227,6 @@ Hide or show the Cenit brand label anytime.
 
 ## 📦 Installation
 
-### Method 1: Load Unpacked Extension
-
 1. Download or clone this repository.
 
 ```bash
