@@ -1,0 +1,6 @@
+.gitignore export-ignore
+.gitattributes export-ignore
+TODO.md export-ignore
+README.md export-ignore
+tsconfig.json export-ignore
+src/ export-ignore
