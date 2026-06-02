@@ -783,6 +783,44 @@ function resetWidgetPositions() {
 }
 document.getElementById('reset-layout-btn').addEventListener('click', resetWidgetPositions);
 
+document.getElementById('reset-layout-default-btn').addEventListener('click', () => {
+  // Reset everything: widget positions + widget visibility + bookmark list? (leave bookmarks as-is)
+  resetWidgetPositions();
+
+  // Reset widget visibility toggles
+  WIDGETS.forEach(id => {
+    Store.set(widgetHiddenKey(id), false);
+    applyWidgetVisibility(id);
+  });
+
+  // Reset background settings
+  Store.set('bgImage', null);
+  Store.set('bgPreset', 0);
+  Store.set('bgOverlay', 35);
+  Store.set('bgBlur', 0);
+  if (overlayRange) { overlayRange.value = 35; }
+  if (blurRange) { blurRange.value = 0; }
+  applyOverlay(35);
+  applyBlur(0);
+  applyBackground(PRESETS[0], false);
+
+
+  // Reset clock details (keep default clock/date visible)
+  Store.set('hideGreeting', false);
+  Store.set('hideDate', false);
+  toggleGreeting.checked = true;
+  toggleDate.checked = true;
+  applyVisibility();
+
+  // Keep brand visibility as-is (default: on). Do not change hideBrand.
+
+  // Reset layout profile selection
+  Store.set('activeLayoutProfile', null);
+  renderProfileOptions();
+
+  updateLayoutRows();
+});
+
 // Drag logic
 let dragging = null, dragOffX = 0, dragOffY = 0;
 
