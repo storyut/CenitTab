@@ -44,6 +44,29 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
+function updateClockScale() {
+  const widget = document.getElementById('widget-clock');
+  const clock = document.getElementById('clock');
+
+  if (!widget || !clock) return;
+
+  const width = widget.offsetWidth;
+  const height = widget.offsetHeight;
+
+  const size = Math.max(
+    40,
+    Math.min(
+      140,
+      Math.min(width * 0.35, height * 0.75)
+    )
+  );
+
+  document.documentElement.style.setProperty(
+  '--clock-widget-size',
+  `${size}px`
+  );
+}
+
 // ─── Background ─────────────────────────────────────────────────────
 const bgLayer      = document.getElementById('bg-layer');
 const bgOverlay    = document.getElementById('bg-overlay');
@@ -371,15 +394,15 @@ function loadNotes() {
 
 if (notesInput) {
   notesInput.addEventListener('input', () => {
-    if (notesPreview) notesPreview.innerHTML = renderMarkdown(notesInput.value);
-  });
-}
+    const value = notesInput.value;
 
-if (notesSaveBtn) {
-  notesSaveBtn.addEventListener('click', () => {
-    const val = notesInput?.value ?? '';
-    Store.set('notesMarkdown', val);
-    if (notesPreview) notesPreview.innerHTML = renderMarkdown(val);
+    // Live preview
+    if (notesPreview) {
+      notesPreview.innerHTML = renderMarkdown(value);
+    }
+
+    // Auto save
+    Store.set('notesMarkdown', value);
   });
 }
 
@@ -456,7 +479,8 @@ function loadBookmarks() {
     expandToggle.type = 'button';
     expandToggle.className = 'bm-expand-toggle';
     expandToggle.title = 'Edit';
-    expandToggle.innerHTML = `<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" width="11" height="11"><path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+    // Down arrow when collapsed, up when expanded
+    expandToggle.textContent = '⌄';
 
 
     const del = document.createElement('button');
@@ -482,6 +506,8 @@ function loadBookmarks() {
     const applyBtn = document.createElement('button');
     applyBtn.className = 'action-btn';
     applyBtn.textContent = 'Apply';
+    applyBtn.style.width = 'auto';
+    applyBtn.style.flex = '0 0 auto';
 
     del.addEventListener('click', (ev) => {
       ev.stopPropagation();
@@ -514,6 +540,8 @@ function loadBookmarks() {
     function setRowExpanded(nextExpanded) {
       row.classList.toggle('bm-row-collapsed', !nextExpanded);
       row.classList.toggle('bm-row-expanded-state', nextExpanded);
+      // Update toggle icon
+      expandToggle.textContent = nextExpanded ? '⌃' : '⌄';
 
       if (nextExpanded) {
         // When opening the row for editing, ensure inputs are the latest values
@@ -529,6 +557,7 @@ function loadBookmarks() {
     // Start collapsed
     row.classList.add('bm-row-collapsed');
     row.classList.remove('bm-row-expanded-state');
+    expandToggle.textContent = '⌄';
 
 
     // Expand/collapse is controlled ONLY via the icon next to the number
@@ -569,16 +598,13 @@ function loadBookmarks() {
     expandedWrap.appendChild(urlInput);
     expandedWrap.appendChild(applyBtn);
 
-    // Top row: [pencil] [number] [name] ... [del]
-    const topRow = document.createElement('div');
-    topRow.className = 'bm-row-top';
-    topRow.appendChild(expandToggle);
-    topRow.appendChild(orderBadge);
-    topRow.appendChild(collapsedName);
-    topRow.appendChild(del);
-
-    row.appendChild(topRow);
+    // Number + icon (icon toggles the editor row)
+    row.appendChild(orderBadge);
+    row.appendChild(expandToggle);
+    row.appendChild(collapsedName);
     row.appendChild(expandedWrap);
+
+    row.appendChild(del);
 
 
     bmManageList.appendChild(row);
@@ -757,69 +783,134 @@ function readCurrentWidgetPosition(id) {
   return centerPositionFromRect(rect);
 }
 
+const CLAMP_PAD = 8;
+function clampWidget(id) {
+  const el = document.getElementById(`widget-${id}`);
+  if (!el || el.hidden) return;
+  const rect = el.getBoundingClientRect();
+  const vw = window.innerWidth, vh = window.innerHeight;
+  let dx = 0, dy = 0;
+  if (rect.left < CLAMP_PAD)             dx = CLAMP_PAD - rect.left;
+  else if (rect.right > vw - CLAMP_PAD)  dx = (vw - CLAMP_PAD) - rect.right;
+  if (rect.top < CLAMP_PAD)              dy = CLAMP_PAD - rect.top;
+  else if (rect.bottom > vh - CLAMP_PAD) dy = (vh - CLAMP_PAD) - rect.bottom;
+  if (dx !== 0 || dy !== 0) {
+  const pos = centerPositionFromPixels(
+    rect.left + dx,
+    rect.top + dy,
+    rect.width,
+    rect.height
+  );
+
+  // Visual clamp only
+  applyWidgetPosition(id, pos);
+}
+}
+function clampAllWidgets() { WIDGETS.forEach(id => clampWidget(id)); }
+
+// ─── Widget Sizes ───────────────────────────────────────────────────
+const WIDGET_MIN = { clock:[160,60], bookmarks:[120,36], recent:[180,80], media:[160,60], notes:[180,100] };
+function sizeKey(id) { return `widgetSize_${id}`; }
+function applyWidgetSize(id, size) {
+  const el = document.getElementById(`widget-${id}`);
+  if (!el) return;
+  if (size) {
+    el.style.width = size.w+'px'; 
+    el.style.height = size.h+'px'; 
+    el.classList.add('widget-sized');
+    if (id === 'clock') {
+    requestAnimationFrame(updateClockScale);
+    }
+  }
+  else { 
+    el.style.width = ''; 
+    el.style.height = ''; 
+    el.classList.remove('widget-sized'); 
+    if (id === 'clock') {
+    requestAnimationFrame(updateClockScale);
+    }
+  }
+}
+function loadWidgetSizes() { WIDGETS.forEach(id => applyWidgetSize(id, Store.get(sizeKey(id)))); }
+
+// ─── Resize Logic ───────────────────────────────────────────────────
+let resizing = null, rsX = 0, rsY = 0, rsW = 0, rsH = 0;
+function enableResize(widgetId) {
+  const el = document.getElementById(`widget-${widgetId}`);
+  if (!el) return;
+  const handle = document.createElement('div');
+  handle.className = 'widget-resize-handle';
+  handle.title = 'Resize';
+  handle.innerHTML = `<svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 8L8 1M4.5 8L8 4.5M8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+  el.appendChild(handle);
+  const start = (cx, cy) => {
+    rsX = cx; rsY = cy; rsW = el.offsetWidth;
+    el.style.bottom = 'auto'; rsH = el.offsetHeight; el.style.bottom = '';
+    resizing = widgetId;
+  };
+  handle.addEventListener('mousedown',  (e) => { e.preventDefault(); e.stopPropagation(); start(e.clientX, e.clientY); });
+  handle.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); start(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
+}
+function onResizeMove(cx, cy) {
+  if (!resizing) return;
+  const el = document.getElementById(`widget-${resizing}`);
+  const [minW, minH] = WIDGET_MIN[resizing] ?? [100,40];
+  const rect = el.getBoundingClientRect();
+  const newW = Math.min(window.innerWidth  - rect.left - CLAMP_PAD, Math.max(minW, rsW + (cx - rsX)));
+  const newH = Math.min(window.innerHeight - rect.top  - CLAMP_PAD, Math.max(minH, rsH + (cy - rsY)));
+  el.style.width = newW+'px'; el.style.height = newH+'px';
+  if (resizing === 'clock') {
+  updateClockScale();
+  }
+  el.classList.add('widget-sized');
+}
+function endResize() {
+  if (!resizing) return;
+  const el = document.getElementById(`widget-${resizing}`);
+  Store.set(sizeKey(resizing), { w: el.offsetWidth, h: el.offsetHeight });
+  if (resizing === 'clock') {
+    updateClockScale();
+  }
+  resizing = null;
+}
+document.addEventListener('mousemove', (e) => { if (resizing) onResizeMove(e.clientX, e.clientY); });
+document.addEventListener('touchmove', (e) => { if (resizing) { e.preventDefault(); onResizeMove(e.touches[0].clientX, e.touches[0].clientY); } }, { passive:false });
+document.addEventListener('mouseup',  endResize);
+document.addEventListener('touchend', endResize);
+
 function loadWidgetPositions() {
   WIDGETS.forEach(id => {
-    const saved = Store.get(posKey(id));
-    const pos = saved ?? DEFAULT_POSITIONS[id];
+    const pos = Store.get(posKey(id)) ?? DEFAULT_POSITIONS[id];
     applyWidgetPosition(id, pos);
-    if (pos.anchor === 'free') {
-      requestAnimationFrame(() => {
-        const normalized = readCurrentWidgetPosition(id);
-        Store.set(posKey(id), normalized);
-        applyWidgetPosition(id, normalized);
-        updateLayoutRows();
-      });
-    }
   });
+  loadWidgetSizes();
+  requestAnimationFrame(() => requestAnimationFrame(clampAllWidgets));
 }
 loadWidgetPositions();
+updateClockScale();
+window.addEventListener('resize', () => {
+  // Restore true saved positions first
+  WIDGETS.forEach(id => {
+    const pos = Store.get(posKey(id)) ?? DEFAULT_POSITIONS[id];
+    applyWidgetPosition(id, pos);
+  });
+
+  // Then temporarily clamp if viewport is too small
+  requestAnimationFrame(() => {
+    requestAnimationFrame(clampAllWidgets);
+  });
+});
 
 function resetWidgetPositions() {
   WIDGETS.forEach(id => {
-    Store.set(posKey(id), null);
+    Store.set(posKey(id), null); Store.set(sizeKey(id), null);
     applyWidgetPosition(id, DEFAULT_POSITIONS[id]);
+    applyWidgetSize(id, null);
   });
+  requestAnimationFrame(() => requestAnimationFrame(clampAllWidgets));
   updateLayoutRows();
 }
 document.getElementById('reset-layout-btn').addEventListener('click', resetWidgetPositions);
-
-document.getElementById('reset-layout-default-btn').addEventListener('click', () => {
-  // Reset everything: widget positions + widget visibility + bookmark list? (leave bookmarks as-is)
-  resetWidgetPositions();
-
-  // Reset widget visibility toggles
-  WIDGETS.forEach(id => {
-    Store.set(widgetHiddenKey(id), false);
-    applyWidgetVisibility(id);
-  });
-
-  // Reset background settings
-  Store.set('bgImage', null);
-  Store.set('bgPreset', 0);
-  Store.set('bgOverlay', 35);
-  Store.set('bgBlur', 0);
-  if (overlayRange) { overlayRange.value = 35; }
-  if (blurRange) { blurRange.value = 0; }
-  applyOverlay(35);
-  applyBlur(0);
-  applyBackground(PRESETS[0], false);
-
-
-  // Reset clock details (keep default clock/date visible)
-  Store.set('hideGreeting', false);
-  Store.set('hideDate', false);
-  toggleGreeting.checked = true;
-  toggleDate.checked = true;
-  applyVisibility();
-
-  // Keep brand visibility as-is (default: on). Do not change hideBrand.
-
-  // Reset layout profile selection
-  Store.set('activeLayoutProfile', null);
-  renderProfileOptions();
-
-  updateLayoutRows();
-});
 
 // Drag logic
 let dragging = null, dragOffX = 0, dragOffY = 0;
@@ -958,26 +1049,28 @@ function endDrag(e) {
   hideSnapIndicator();
 
   const draggedId = dragging;
-  const el  = document.getElementById(`widget-${draggedId}`);
+  dragging = null;                          // clear first so mousemove guards fire
+  const el = document.getElementById(`widget-${draggedId}`);
   el.classList.remove('dragging');
 
-  // Compute final position from actual rendered pixels.
-  // This avoids mismatches caused by the bookmark widget's default anchor styles
-  // (e.g. bottom: 36px + transforms) when drag ended.
-  const rect = el.getBoundingClientRect();
-  const elW = rect.width, elH = rect.height;
-  const curX = rect.left;
-  const curY = rect.top;
-  const pos = centerPositionFromPixels(curX, curY, elW, elH);
+  // Read position from the inline px values onDragMove set — immune to any
+  // CSS bottom/top conflict that would corrupt getBoundingClientRect height.
+  const curX = parseFloat(el.style.left) || 0;
+  const curY = parseFloat(el.style.top)  || 0;
+  const elW  = el.offsetWidth;
+  // Temporarily neutralise any CSS bottom so offsetHeight = natural content height
+  el.style.bottom = 'auto';
+  const elH = el.offsetHeight;
+  el.style.bottom = '';
 
-  // Ensure we end up in the px/absolute coordinate system consistently.
-  el.style.transform = 'none';
-
+  const pos = {
+  x: curX,
+  y: curY,
+  anchor: 'free'
+};
   applyWidgetPosition(draggedId, pos);
-
   Store.set(posKey(draggedId), pos);
   updateLayoutRows();
-  dragging = null;
   slidePanelForDrag(false);
 }
 document.addEventListener('mouseup',  endDrag);
@@ -1025,6 +1118,7 @@ function onPeekCheck(e) {
 }
 
 WIDGETS.forEach(enableDrag);
+WIDGETS.forEach(enableResize);
 
 // ─── Layout Mode ────────────────────────────────────────────────────
 const layoutBanner = document.getElementById('layout-banner');
@@ -1087,15 +1181,17 @@ function setProfiles(profiles) {
 function captureLayoutProfile() {
   const positions = {};
   const hidden = {};
+  const sizes = {};
   WIDGETS.forEach(id => {
     positions[id] = Store.get(posKey(id)) ?? DEFAULT_POSITIONS[id];
     hidden[id] = !!Store.get(widgetHiddenKey(id));
+    sizes[id] = Store.get(sizeKey(id));
   });
 
   return {
     positions,
     hidden,
-
+    sizes,
     // Include background settings so users get the same look per profile.
     backgroundDetails: {
       bgImage: Store.get('bgImage'),
@@ -1108,6 +1204,8 @@ function captureLayoutProfile() {
       hideGreeting: !!Store.get('hideGreeting'),
       hideDate: !!Store.get('hideDate'),
     },
+
+    notesMarkdown: Store.get('notesMarkdown') ?? ''
   };
 }
 
@@ -1120,7 +1218,24 @@ function applyLayoutProfile(profile) {
     const pos = profile.positions?.[id] ?? DEFAULT_POSITIONS[id];
     Store.set(posKey(id), pos);
     applyWidgetPosition(id, pos);
+    const size = profile.sizes?.[id];
+    Store.set(sizeKey(id), size);
+    if (size) {
+    applyWidgetSize(id, size);
+    } else {
+      applyWidgetSize(id, null);
+    }
+    if (profile.notesMarkdown !== undefined) {
+      Store.set('notesMarkdown', profile.notesMarkdown);
 
+      if (notesInput) {
+        notesInput.value = profile.notesMarkdown;
+      }
+
+      if (notesPreview) {
+        notesPreview.innerHTML = renderMarkdown(profile.notesMarkdown);
+      }
+    }
     Store.set(widgetHiddenKey(id), !!profile.hidden?.[id]);
     applyWidgetVisibility(id);
   });
@@ -1164,6 +1279,7 @@ function applyLayoutProfile(profile) {
   toggleWidgetMedia.checked = !Store.get(widgetHiddenKey('media'));
   applyVisibility();
   updateLayoutRows();
+  requestAnimationFrame(() => requestAnimationFrame(clampAllWidgets));
 }
 
 

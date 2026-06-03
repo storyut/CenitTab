@@ -4,7 +4,7 @@ A highly customizable browser new tab extension designed to transform your defau
 
 Cenit combines elegant aesthetics with practical widgets, allowing you to create a personalized dashboard that fits your workflow.
 
-![Version](https://img.shields.io/badge/version-1.1.0-gold)
+![Version](https://img.shields.io/badge/version-1.1.1-gold)
 ![Manifest](https://img.shields.io/badge/Manifest-v3-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 

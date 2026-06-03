@@ -106,10 +106,35 @@ body.layout-mode .widget {
   cursor: move;
 }
 
+/* ── Resize Handle ───────────────────────────────────────── */
+.widget-resize-handle {
+  position: absolute; bottom: -12px; right: -12px;
+  width: 20px; height: 20px;
+  cursor: se-resize; z-index: 35;
+  opacity: 0; transition: opacity 0.2s;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent);
+  background: rgba(14,13,20,0.85);
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+}
+.widget:hover .widget-resize-handle { opacity: 0.55; }
+.widget-resize-handle:hover { opacity: 1 !important; }
+body.layout-mode .widget .widget-resize-handle { opacity: 0.7; }
+body.layout-mode .widget:hover .widget-resize-handle { opacity: 1; }
+
+/* When widget has an explicit size, inner content fills it */
+.widget.widget-sized { overflow: hidden; }
+.widget.widget-sized .mini-widget {
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column; box-sizing: border-box;
+}
+.widget.widget-sized .recent-widget .recent-list { flex: 1; overflow-y: auto; min-height: 0; }
+.widget.widget-sized .notes-widget .notes-input  { flex: 1; min-height: 0; resize: none; }
+.widget.widget-sized .bookmarks-bar { width: 100%; height: 100%; overflow: hidden; box-sizing: border-box; }
+
 /* ── Clock Widget ────────────────────────────────────────── */
 #widget-clock {
-  left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
   text-align: center;
   flex-direction: column;
 }
@@ -123,7 +148,11 @@ body.layout-mode .widget {
 
 .clock {
   font-family: var(--font-clock);
-  font-size: clamp(72px, 12vw, 140px);
+  font-size: clamp(
+    48px,
+    min(var(--clock-widget-size, 999px), 14vw),
+    320px
+  );
   font-weight: 300;
   letter-spacing: -0.03em;
   line-height: 1;
@@ -147,18 +176,14 @@ body.layout-mode .widget {
 
 /* ── Bookmarks Widget ────────────────────────────────────── */
 #widget-bookmarks {
-  bottom: 36px; left: 50%;
-  transform: translateX(-50%);
   animation: fadeUp 1s ease both 0.6s;
   width: max-content;
   max-width: 90vw;
 }
 #widget-recent {
-  left: 40px; top: 120px;
   width: min(280px, 86vw);
 }
 #widget-media {
-  right: 40px; top: 120px;
   width: min(280px, 86vw);
 }
 .bookmarks-bar {
@@ -445,24 +470,13 @@ body.layout-mode .widget {
 
 .bm-row {
   display: flex;
-  flex-direction: column;
-  gap: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   padding: 8px 12px;
   background: var(--glass);
   border: 1px solid var(--glass-border);
   border-radius: 8px;
-  transition: border-color 0.2s;
-}
-
-.bm-row-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
-
-.bm-row-expanded-state {
-  border-color: rgba(201,169,110,0.35);
 }
 
 /* keep inputs from adding extra spacing in the panel */
@@ -473,10 +487,6 @@ body.layout-mode .widget {
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text);
-  flex: 1 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .bm-order {
@@ -485,24 +495,27 @@ body.layout-mode .widget {
   letter-spacing: 0.1em;
   color: var(--text-dim);
   flex: 0 0 auto;
-  min-width: 14px;
-  text-align: center;
+  margin-right: 6px;
+  min-width: 18px;
+  text-align: right;
 }
 
 .bm-expand-toggle {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
   border: 1px solid var(--glass-border);
-  background: rgba(255,255,255,0.04);
+  background: rgba(255,255,255,0.03);
   color: var(--text-dim);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  transition: all 0.18s;
+  transition: all 0.2s;
   padding: 0;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .bm-expand-toggle:hover {
@@ -524,23 +537,14 @@ body.layout-mode .widget {
 
 .bm-row-expanded {
   display: none;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--glass-border);
+  gap: 8px;
+  align-items: center;
+  flex: 1 1 auto;
 }
 
 /* when expanded-state is toggled, show the editable fields */
 .bm-row-expanded-state .bm-row-expanded {
   display: flex;
-}
-
-/* apply button inside expanded row */
-.bm-row-expanded .action-btn {
-  width: auto;
-  align-self: flex-end;
-  padding: 7px 16px;
 }
 
 /* visually indicate draggable */
@@ -552,11 +556,9 @@ body.layout-mode .widget {
   border: none;
   color: var(--text-dim);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
   transition: color 0.2s;
   flex-shrink: 0;
-  padding: 2px 4px;
-  margin-left: auto;
 }
 .bm-del:hover { color: #e57373; }
 
