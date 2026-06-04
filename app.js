@@ -777,16 +777,38 @@ loadRecentVisits();
 // Media
 const mediaStatus = document.getElementById('media-status');
 const mediaSource = document.getElementById('media-source');
+const mediaIcon = document.getElementById('media-icon');
+const mediaThumb = document.getElementById('media-thumb');
 
 function renderMediaTab(tab) {
-  if (!mediaStatus || !mediaSource) return;
+
   if (!tab) {
     mediaStatus.textContent = 'No media playing';
     mediaSource.textContent = '';
+
+    mediaThumb.src = '';
+    mediaThumb.style.display = 'none';
     return;
   }
-  mediaStatus.textContent = tab.title || 'Media playing';
-  mediaSource.textContent = tab.url ? hostnameLabel(tab.url) : '';
+
+  mediaStatus.textContent =
+    tab.title || 'Media playing';
+
+  mediaSource.textContent =
+    tab.url ? hostnameLabel(tab.url) : '';
+
+  try {
+
+    mediaThumb.src =
+      `https://www.google.com/s2/favicons?domain=${
+        new URL(tab.url).hostname
+      }&sz=64`;
+
+    mediaThumb.style.display = '';
+
+  } catch {
+    mediaThumb.style.display = 'none';
+  }
 }
 
 function loadMediaStatus() {

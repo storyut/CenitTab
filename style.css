@@ -249,6 +249,29 @@ body.layout-mode .widget:hover .widget-resize-handle { opacity: 1; }
   color: var(--text);
   text-decoration: none;
 }
+
+.media-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.media-thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+
+  background: rgba(255,255,255,0.08);
+  border: 1px solid var(--glass-border);
+}
+
+.media-info {
+  flex: 1;
+  min-width: 0;
+}
+
 .recent-title,
 .media-status {
   font-family: var(--font-ui);
