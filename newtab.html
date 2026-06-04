@@ -124,6 +124,8 @@
       <input class="input" type="text" id="custom-font-url" placeholder="Paste Google Fonts @import URL"/>
       <input class="input" type="text" id="custom-font-name" placeholder="Font family name (e.g. Playfair Display)"/>
       <button class="action-btn" id="apply-custom-font-btn">Apply Custom Font</button>
+      <p class="label" style="margin-top:20px">Imported Fonts</p>
+      <div id="custom-font-list" class="custom-font-list"></div>
 
       <div class="divider"></div>
 
@@ -198,6 +200,13 @@
           <span class="toggle-slider"></span>
         </label>
       </div>
+      <div class="toggle-row toggle-row-spread" style="margin-top:10px">
+        <span class="toggle-label">Notes</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggle-widget-notes" checked/>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
 
       <div class="divider"></div>
 
@@ -225,6 +234,9 @@
 
   <!-- Layout Panel -->
   <aside class="panel" id="layout-panel">
+    <button id="layout-collapse-btn" class="layout-collapse-tab">
+      ◀
+    </button>
     <div class="panel-header">
       <span>Widget Layout</span>
       <button class="close-btn" data-target="layout-panel">✕</button>

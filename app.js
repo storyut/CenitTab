@@ -1,5 +1,3 @@
-/* ── Lumina New Tab · app.js ── */
-
 // ─── Storage ────────────────────────────────────────────────────────
 const Store = {
   get: (key) => { try { return JSON.parse(localStorage.getItem(key) ?? 'null'); } catch { return null; } },
@@ -211,6 +209,8 @@ function injectFontLink(url, id) {
 // Pre-load all built-in fonts
 BUILTIN_FONTS.forEach((f, i) => { if (f.url) injectFontLink(f.url, `builtin-font-${i}`); });
 
+loadCustomFonts();
+
 function getAllFonts() {
   const custom = Store.get('customFonts') ?? [];
   return [...BUILTIN_FONTS, ...custom];
@@ -235,6 +235,81 @@ function populateFontSelects() {
   document.getElementById('ui-font-select').value    = savedUI;
 }
 
+function loadCustomFonts() {
+  const customFonts = Store.get('customFonts') ?? [];
+
+  customFonts.forEach((font, i) => {
+    if (font.url) {
+      injectFontLink(
+        font.url,
+        `saved-custom-font-${i}`
+      );
+    }
+  });
+}
+
+function renderCustomFontList() {
+  const container = document.getElementById('custom-font-list');
+  if (!container) return;
+
+  const customFonts = Store.get('customFonts') ?? [];
+
+  container.innerHTML = '';
+
+  customFonts.forEach((font, index) => {
+
+    const row = document.createElement('div');
+    row.className = 'custom-font-row';
+
+    const name = document.createElement('span');
+    name.className = 'custom-font-name';
+    name.textContent = font.name;
+
+    const del = document.createElement('button');
+    del.className = 'custom-font-delete';
+    del.textContent = '✕';
+
+    del.addEventListener('click', () => {
+      deleteCustomFont(index);
+    });
+
+    row.appendChild(name);
+    row.appendChild(del);
+
+    container.appendChild(row);
+  });
+}
+
+function deleteCustomFont(index) {
+
+  const customFonts = Store.get('customFonts') ?? [];
+
+  const removed = customFonts[index];
+
+  customFonts.splice(index, 1);
+
+  Store.set('customFonts', customFonts);
+
+  populateFontSelects();
+  renderCustomFontList();
+
+  // Fallback if selected font no longer exists
+  const clockIdx = Store.get('clockFontIdx') ?? 0;
+  const uiIdx = Store.get('uiFontIdx') ?? 1;
+
+  const allFonts = getAllFonts();
+
+  if (clockIdx >= allFonts.length) {
+    Store.set('clockFontIdx', 0);
+    applyClockFont(0);
+  }
+
+  if (uiIdx >= allFonts.length) {
+    Store.set('uiFontIdx', 1);
+    applyUIFont(1);
+  }
+}
+
 function applyClockFont(idx) {
   const f = getAllFonts()[idx];
   if (!f) return;
@@ -253,6 +328,7 @@ function updateFontPreview(css) {
 
 // Restore fonts on load
 populateFontSelects();
+renderCustomFontList();
 applyClockFont(Store.get('clockFontIdx') ?? 0);
 applyUIFont(Store.get('uiFontIdx') ?? 1);
 
@@ -285,6 +361,7 @@ document.getElementById('apply-custom-font-btn').addEventListener('click', () =>
   Store.set('customFonts', customFonts);
 
   populateFontSelects();
+  renderCustomFontList();
   document.getElementById('custom-font-url').value  = '';
   document.getElementById('custom-font-name').value = '';
 });
@@ -297,6 +374,7 @@ const toggleWidgetClock = document.getElementById('toggle-widget-clock');
 const toggleWidgetBookmarks = document.getElementById('toggle-widget-bookmarks');
 const toggleWidgetRecent = document.getElementById('toggle-widget-recent');
 const toggleWidgetMedia = document.getElementById('toggle-widget-media');
+const toggleWidgetNotes = document.getElementById('toggle-widget-notes');
 const recentCountInput = document.getElementById('recent-count-input');
 const toggleBrand = document.getElementById('toggle-brand');
 const brandEl = document.querySelector('.brand');
@@ -324,8 +402,15 @@ applyVisibility();
 function widgetHiddenKey(id) { return `widgetHidden_${id}`; }
 function applyWidgetVisibility(id) {
   const el = document.getElementById(`widget-${id}`);
+  console.log(
+    id,
+    Store.get(widgetHiddenKey(id))
+  );
   if (!el) return;
-  el.hidden = !!Store.get(widgetHiddenKey(id));
+  el.style.display =
+  Store.get(widgetHiddenKey(id))
+    ? 'none'
+    : '';
 }
 function bindWidgetVisibilityToggle(toggle, id) {
   if (!toggle) return;
@@ -341,6 +426,7 @@ bindWidgetVisibilityToggle(toggleWidgetClock, 'clock');
 bindWidgetVisibilityToggle(toggleWidgetBookmarks, 'bookmarks');
 bindWidgetVisibilityToggle(toggleWidgetRecent, 'recent');
 bindWidgetVisibilityToggle(toggleWidgetMedia, 'media');
+bindWidgetVisibilityToggle(toggleWidgetNotes, 'notes');
 
 function applyBrandVisibility() {
   const hidden = Store.get('hideBrand');
@@ -569,9 +655,6 @@ function loadBookmarks() {
       setRowExpanded(nextExpanded);
     });
 
-
-
-
     // Drag reorder
     row.addEventListener('dragstart', (ev) => {
       ev.dataTransfer.effectAllowed = 'move';
@@ -737,27 +820,101 @@ function posKey(id) { return `widgetPos_${id}`; }
 function applyWidgetPosition(id, pos) {
   const el = document.getElementById(`widget-${id}`);
   if (!el) return;
-  // Clear all positional styles first
-  el.style.left = ''; el.style.right = ''; el.style.top = ''; el.style.bottom = '';
+
+  el.style.left = '';
+  el.style.right = '';
+  el.style.top = '';
+  el.style.bottom = '';
   el.style.transform = '';
 
-  if (pos.anchor === 'center') {
-    el.style.left      = pos.x + '%';
-    el.style.top       = pos.y + '%';
-    el.style.transform = 'translate(-50%, -50%)';
-  } else if (pos.anchor === 'bottom-center') {
-    el.style.left      = pos.x + '%';
-    el.style.bottom    = (pos.bottom ?? 36) + 'px';
-    el.style.transform = 'translateX(-50%)';
-  } else if (pos.anchor === 'free-center') {
-    el.style.left      = pos.x + '%';
-    el.style.top       = pos.y + '%';
-    el.style.transform = 'translate(-50%, -50%)';
-  } else {
-    // free absolute
-    el.style.left = pos.x + 'px';
-    el.style.top  = pos.y + 'px';
+  switch (pos.anchor) {
+
+    case 'center':
+      el.style.left = pos.x + '%';
+      el.style.top = pos.y + '%';
+      el.style.transform = 'translate(-50%, -50%)';
+      break;
+
+    case 'bottom-center':
+      el.style.left = pos.x + '%';
+      el.style.bottom = (pos.bottom ?? 36) + 'px';
+      el.style.transform = 'translateX(-50%)';
+      break;
+
+    case 'snap-center':
+      el.style.left = '50%';
+      el.style.top = '50%';
+      el.style.transform = 'translate(-50%, -50%)';
+      break;
+
+    case 'snap-top-left':
+      el.style.left = '40px';
+      el.style.top = '40px';
+      break;
+
+    case 'snap-top-center':
+      el.style.left = '50%';
+      el.style.top = '40px';
+      el.style.transform = 'translateX(-50%)';
+      break;
+
+    case 'snap-top-right':
+      el.style.right = '40px';
+      el.style.top = '40px';
+      break;
+
+    case 'snap-mid-left':
+      el.style.left = '40px';
+      el.style.top = '50%';
+      el.style.transform = 'translateY(-50%)';
+      break;
+
+    case 'snap-mid-right':
+      el.style.right = '40px';
+      el.style.top = '50%';
+      el.style.transform = 'translateY(-50%)';
+      break;
+
+    case 'snap-bottom-left':
+      el.style.left = '40px';
+      el.style.bottom = '40px';
+      break;
+
+    case 'snap-bottom-center':
+      el.style.left = '50%';
+      el.style.bottom = '40px';
+      el.style.transform = 'translateX(-50%)';
+      break;
+
+    case 'snap-bottom-right':
+      el.style.right = '40px';
+      el.style.bottom = '40px';
+      break;
+
+    case 'free-center':
+      el.style.left = pos.x + '%';
+      el.style.top = pos.y + '%';
+      el.style.transform = 'translate(-50%, -50%)';
+      break;
+
+    default:
+      el.style.left = pos.x + 'px';
+      el.style.top = pos.y + 'px';
   }
+}
+
+function snapZoneToAnchor(zoneName) {
+  return {
+    'center': 'snap-center',
+    'top-left': 'snap-top-left',
+    'top-center': 'snap-top-center',
+    'top-right': 'snap-top-right',
+    'mid-left': 'snap-mid-left',
+    'mid-right': 'snap-mid-right',
+    'bot-left': 'snap-bottom-left',
+    'bot-center': 'snap-bottom-center',
+    'bot-right': 'snap-bottom-right',
+  }[zoneName];
 }
 
 function centerPositionFromRect(rect) {
@@ -1009,9 +1166,6 @@ function enableDrag(widgetId) {
     el.style.right     = '';
     el.style.left      = rect.left + 'px';
     el.style.top       = rect.top  + 'px';
-
-    // 4. Slide the layout panel away while dragging.
-    slidePanelForDrag(true);
   }
 
   el.addEventListener('mousedown',  onDown);
@@ -1020,19 +1174,38 @@ function enableDrag(widgetId) {
 
 function onDragMove(cx, cy) {
   if (!dragging) return;
-  const el   = document.getElementById(`widget-${dragging}`);
 
-  // Keep widget in a pure px-positioned state while dragging.
-  // This prevents any translate() scaling/jitter from default anchors.
+  const el = document.getElementById(`widget-${dragging}`);
+
   el.style.transform = 'none';
   el.style.bottom = '';
   el.style.right = '';
 
   const newX = cx - dragOffX;
   const newY = cy - dragOffY;
+
   el.style.left = newX + 'px';
-  el.style.top  = newY + 'px';
-  hideSnapIndicator();
+  el.style.top = newY + 'px';
+
+  const rect = el.getBoundingClientRect();
+
+  const snap = getSnapPosition(
+    rect.left + rect.width / 2,
+    rect.top + rect.height / 2,
+    rect.width,
+    rect.height
+  );
+
+  if (snap) {
+    showSnapIndicator(
+      snap.snapX,
+      snap.snapY,
+      rect.width,
+      rect.height
+    );
+  } else {
+    hideSnapIndicator();
+  }
 }
 
 
@@ -1063,59 +1236,53 @@ function endDrag(e) {
   const elH = el.offsetHeight;
   el.style.bottom = '';
 
-  const pos = {
-  x: curX,
-  y: curY,
-  anchor: 'free'
-};
+  const snap = getSnapPosition(
+  curX + elW / 2,
+  curY + elH / 2,
+  elW,
+  elH
+  );
+
+  let pos;
+
+  if (snap) {
+    if (draggedId === 'bookmarks') {
+      pos = {
+        x: snap.snapX,
+        y: snap.snapY,
+        anchor: 'free'
+      };
+    } else {
+      pos = {
+        anchor: snapZoneToAnchor(snap.zone.name)
+      };
+    }
+  } else {
+    if (draggedId === 'bookmarks') {
+      pos = {
+        x: snap.snapX,
+        y: snap.snapY,
+        anchor: 'free'
+      };
+    } else {
+      pos = centerPositionFromPixels(
+        curX,
+        curY,
+        elW,
+        elH
+      );
+    }
+  }
+  console.log('before apply', el.getBoundingClientRect().left);
   applyWidgetPosition(draggedId, pos);
+  requestAnimationFrame(() => {
+  console.log('after apply', el.getBoundingClientRect().left);
+});
   Store.set(posKey(draggedId), pos);
   updateLayoutRows();
-  slidePanelForDrag(false);
 }
 document.addEventListener('mouseup',  endDrag);
 document.addEventListener('touchend', endDrag);
-
-
-// ─── Layout Panel Slide-away During Drag ──────────────────────────────
-// Hides the panel while dragging; hover near right edge to peek it back.
-let panelPeeking = false;
-
-function slidePanelForDrag(hide) {
-  const panel = document.getElementById('layout-panel');
-  if (!panel.classList.contains('open')) return;
-  if (hide) {
-    panel.style.transition = 'right 0.25s cubic-bezier(.4,0,.2,1)';
-    panel.style.right = '-320px'; // push almost fully off, no peek tab
-    // peek listener added separately — only fires when NOT dragging
-  } else {
-    document.removeEventListener('mousemove', onPeekCheck);
-    panel.style.transition = 'right 0.25s cubic-bezier(.4,0,.2,1)';
-    panel.style.right = '0px';
-    panelPeeking = false;
-    // Clear inline style after transition so CSS .open class takes over again
-    setTimeout(() => { panel.style.right = ''; panel.style.transition = ''; }, 260);
-    // Re-attach peek listener now that drag is done
-    document.addEventListener('mousemove', onPeekCheck);
-  }
-}
-
-function onPeekCheck(e) {
-  // Never peek while actively dragging a widget
-  if (dragging) return;
-  const panel = document.getElementById('layout-panel');
-  if (!panel.classList.contains('open')) return;
-  const nearRight = e.clientX > window.innerWidth - 60;
-  if (nearRight && !panelPeeking) {
-    panelPeeking = true;
-    panel.style.transition = 'right 0.2s ease';
-    panel.style.right = '0px';
-  } else if (!nearRight && panelPeeking) {
-    panelPeeking = false;
-    panel.style.transition = 'right 0.2s ease';
-    panel.style.right = '-320px';
-  }
-}
 
 WIDGETS.forEach(enableDrag);
 WIDGETS.forEach(enableResize);
@@ -1277,6 +1444,7 @@ function applyLayoutProfile(profile) {
   toggleWidgetBookmarks.checked = !Store.get(widgetHiddenKey('bookmarks'));
   toggleWidgetRecent.checked = !Store.get(widgetHiddenKey('recent'));
   toggleWidgetMedia.checked = !Store.get(widgetHiddenKey('media'));
+  toggleWidgetNotes.checked = !Store.get(widgetHiddenKey('notes'));
   applyVisibility();
   updateLayoutRows();
   requestAnimationFrame(() => requestAnimationFrame(clampAllWidgets));
@@ -1382,24 +1550,40 @@ function openPanel(id) {
   if (activePanel && activePanel !== id) closePanel(activePanel);
   if (id === 'layout-panel') { updateLayoutRows(); setLayoutMode(true); }
   document.getElementById(id).classList.add('open');
+  if (id === 'layout-panel') {
+  const panel = document.getElementById('layout-panel');
+  panel.classList.remove('collapsed');
+
+  const btn = document.getElementById('layout-collapse-btn');
+  if (btn) btn.textContent = '◀';
+  }
   // Don't activate backdrop in layout mode — it would intercept widget drags
   if (!layoutMode) backdrop.classList.add('active');
   activePanel = id;
+  if (id === 'layout-panel') {
+  const panel = document.getElementById('layout-panel');
+  panel.classList.remove('collapsed');
+  const btn = document.getElementById('layout-collapse-btn');
+
+  if (btn) {
+    btn.textContent = '◀';
+  }
+}
 }
 function closePanel(id) {
   const el = document.getElementById(id);
   if (el) {
-    // Clear any inline right override from slidePanelForDrag so CSS handles the slide-out
     el.style.right = '';
     el.style.transition = '';
     el.classList.remove('open');
+    if (id === 'layout-panel') {
+    el.classList.remove('collapsed');
+  }
   }
   backdrop.classList.remove('active');
   activePanel = null;
   if (id === 'layout-panel') {
     setLayoutMode(false);
-    document.removeEventListener('mousemove', onPeekCheck);
-    panelPeeking = false;
   }
 }
 
@@ -1411,6 +1595,21 @@ document.getElementById('settings-btn').addEventListener('click', () =>
   activePanel === 'settings-panel' ? closePanel('settings-panel') : openPanel('settings-panel'));
 document.getElementById('layout-btn').addEventListener('click', () =>
   activePanel === 'layout-panel' ? closePanel('layout-panel') : openPanel('layout-panel'));
+const layoutCollapseBtn =
+  document.getElementById('layout-collapse-btn');
+
+layoutCollapseBtn?.addEventListener('click', () => {
+
+  const panel =
+    document.getElementById('layout-panel');
+
+  panel.classList.toggle('collapsed');
+
+  layoutCollapseBtn.textContent =
+    panel.classList.contains('collapsed')
+      ? '▶'
+      : '◀';
+});
 
 document.querySelectorAll('.close-btn').forEach(btn =>
   btn.addEventListener('click', () => closePanel(btn.dataset.target)));
