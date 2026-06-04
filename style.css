@@ -43,7 +43,13 @@ html, body {
   display: flex; justify-content: space-between; align-items: center;
   padding: 20px 32px;
   animation: fadeDown 0.8s ease both;
+  pointer-events: none;
 }
+.top-bar button,
+.top-bar .brand {
+  pointer-events: auto;
+}
+
 .brand {
   font-family: var(--font-mono);
   font-size: 13px; letter-spacing: 0.18em;
@@ -191,8 +197,8 @@ body.layout-mode .widget:hover .widget-resize-handle { opacity: 1; }
   background: var(--glass);
   border: 1px solid var(--glass-border);
   backdrop-filter: blur(20px);
-  border-radius: 50px;
-  padding: 8px 14px;
+  border-radius: 30px;
+  padding: 8px 8px;
   width: max-content;
   max-width: 90vw; flex-wrap: wrap; justify-content: center;
 }
