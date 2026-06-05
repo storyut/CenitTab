@@ -1198,13 +1198,16 @@ body.layout-mode .widget:hover .widget-resize-handle { opacity: 1; }
 
 /* v1.3.3 fix: compact bookmark folder tabs and visible active-folder links */
 #widget-bookmarks {
-  width: auto !important;
-  height: auto !important;
+  width: auto;
+  height: auto;
   max-width: 90vw !important;
 }
 #widget-bookmarks.widget-sized {
-  width: auto !important;
-  height: auto !important;
+  /* Preserve the inline width/height set by the resize code.
+     The previous auto !important rules overrode el.style.width/height,
+     so only the bookmark widget appeared impossible to resize. */
+  width: auto;
+  height: auto;
 }
 #widget-bookmarks .bookmarks-bar {
   width: max-content !important;
@@ -1218,6 +1221,12 @@ body.layout-mode .widget:hover .widget-resize-handle { opacity: 1; }
   gap: 8px !important;
   padding: 8px !important;
   overflow: visible !important;
+}
+#widget-bookmarks.widget-sized .bookmarks-bar {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  overflow: hidden !important;
 }
 #widget-bookmarks .bookmark-folder-row {
   width: max-content !important;
@@ -1256,8 +1265,45 @@ body.layout-mode .widget:hover .widget-resize-handle { opacity: 1; }
   opacity: 1 !important;
   visibility: visible !important;
 }
+#widget-bookmarks.widget-sized #bookmark-list.bookmark-list {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  height: auto !important;
+  overflow-y: auto !important;
+  align-content: flex-start !important;
+}
 #widget-bookmarks #bookmark-list .bm-item {
   display: inline-flex !important;
   opacity: 1 !important;
   visibility: visible !important;
+}
+
+/* Center bookmark widget folders and bookmark tabs */
+#widget-bookmarks .bookmarks-bar {
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+#widget-bookmarks .bookmark-folder-row {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+#widget-bookmarks .bm-widget-folder-tabs,
+#bookmark-folder-tabs {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 6px !important;
+  text-align: center;
+}
+
+#widget-bookmarks #bookmark-list.bookmark-list {
+  justify-content: center !important;
+  align-items: center !important;
+  text-align: center;
 }
