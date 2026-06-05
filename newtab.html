@@ -45,9 +45,11 @@
   <div class="widget" id="widget-bookmarks" data-widget="bookmarks">
     <div class="widget-drag-handle" title="Drag to reposition"></div>
     <section class="bookmarks-bar" id="bookmarks-bar">
-      <div id="bookmark-folder-tabs" class="bookmark-folder-tabs"></div>
+      <div class="bookmark-folder-row">
+        <div id="bookmark-folder-tabs" class="bm-widget-folder-tabs" aria-label="Bookmark folders"></div>
+        <button class="add-bm-btn" id="add-bm-btn" title="Add bookmark">＋</button>
+      </div>
       <div id="bookmark-list" class="bookmark-list"></div>
-      <button class="add-bm-btn" id="add-bm-btn" title="Add bookmark">＋</button>
     </section>
   </div>
 
@@ -186,6 +188,44 @@
         <label class="toggle-switch"><input type="checkbox" id="toggle-widget-notes" checked/><span class="toggle-slider"></span></label>
       </div>
       <div class="divider"></div>
+      <p class="label">Widget Customization</p>
+      <select class="input select-input" id="widget-custom-select" aria-label="Choose widget to customize">
+        <option value="clock">Clock</option>
+        <option value="search">Search</option>
+        <option value="bookmarks">Bookmarks</option>
+        <option value="recent">Recently Visited</option>
+        <option value="media">Media</option>
+        <option value="notes">Notes</option>
+      </select>
+      <p class="settings-help">Customize each widget independently. Changes save automatically.</p>
+      <div class="widget-custom-grid">
+        <label class="widget-custom-field">
+          <span>Opacity <strong id="widget-opacity-val">100%</strong></span>
+          <input type="range" id="widget-opacity-range" min="20" max="100" value="100" class="slider"/>
+        </label>
+        <label class="widget-custom-field">
+          <span>Corner Radius <strong id="widget-radius-val">8px</strong></span>
+          <input type="range" id="widget-radius-range" min="0" max="40" value="8" class="slider"/>
+        </label>
+        <label class="widget-custom-field">
+          <span>Accent Color</span>
+          <input type="color" id="widget-accent-color" class="widget-color-input" value="#c9a96e"/>
+        </label>
+      </div>
+      <div class="toggle-row toggle-row-spread" style="margin-top:10px">
+        <span class="toggle-label">Glass Background</span>
+        <label class="toggle-switch"><input type="checkbox" id="widget-bg-toggle" checked/><span class="toggle-slider"></span></label>
+      </div>
+      <div class="toggle-row toggle-row-spread" style="margin-top:10px">
+        <span class="toggle-label">Border</span>
+        <label class="toggle-switch"><input type="checkbox" id="widget-border-toggle" checked/><span class="toggle-slider"></span></label>
+      </div>
+      <div class="toggle-row toggle-row-spread" style="margin-top:10px">
+        <span class="toggle-label">Widget Title</span>
+        <label class="toggle-switch"><input type="checkbox" id="widget-title-toggle" checked/><span class="toggle-slider"></span></label>
+      </div>
+      <button class="action-btn secondary-action" id="widget-reset-appearance-btn" type="button">Reset Selected Widget</button>
+      <div class="divider"></div>
       <p class="label">Search</p>
       <select class="input select-input" id="search-engine-select">
         <option value="google">Google</option>
@@ -253,12 +293,11 @@
       <button class="action-btn" id="save-bm-btn">Save Bookmark</button>
       <div class="divider"></div>
       <p class="label">Folders</p>
-      <div class="bm-folder-create-row">
-        <input class="input" type="text" id="bm-folder-name" placeholder="New folder name"/>
-        <button class="action-btn bm-folder-add-btn" id="save-bm-folder-btn" type="button">Add</button>
+      <div class="bm-folder-add-row">
+        <input class="input" type="text" id="bm-folder-name" placeholder="Folder name"/>
+        <button class="bm-folder-add-btn" id="add-bm-folder-btn" type="button" title="Add folder">＋</button>
       </div>
-      <div id="bm-folder-manage-list" class="bm-folder-manage-list"></div>
-      <p class="settings-help">Use folders to filter the bookmark widget and keep the panel organized.</p>
+      <div id="bm-folder-list" class="bm-folder-list"></div>
       <p class="label" style="margin-top:20px">Saved Bookmarks</p>
       <div id="bm-manage-list" class="bm-manage-list"></div>
     </div>

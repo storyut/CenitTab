@@ -615,67 +615,69 @@ if (notesPreviewToggleBtn) {
 loadNotes();
 
 // ─── Bookmarks ──────────────────────────────────────────────────────
-const bookmarkList = document.getElementById('bookmark-list');
+const bookmarkList      = document.getElementById('bookmark-list');
+const bmManageList      = document.getElementById('bm-manage-list');
+const bmNameInput       = document.getElementById('bm-name');
+const bmUrlInput        = document.getElementById('bm-url');
 const bookmarkFolderTabs = document.getElementById('bookmark-folder-tabs');
-const bmManageList = document.getElementById('bm-manage-list');
-const bmFolderManageList = document.getElementById('bm-folder-manage-list');
-const bmNameInput  = document.getElementById('bm-name');
-const bmUrlInput   = document.getElementById('bm-url');
-const bmFolderSelect = document.getElementById('bm-folder-select');
+const bmFolderSelect    = document.getElementById('bm-folder-select');
 const bmFolderNameInput = document.getElementById('bm-folder-name');
-const saveBmFolderBtn = document.getElementById('save-bm-folder-btn');
+const bmFolderList      = document.getElementById('bm-folder-list');
+const DEFAULT_BOOKMARK_FOLDER_ID = 'folder_default';
 
-const DEFAULT_BOOKMARK_FOLDER_ID = 'general';
-const DEFAULT_BOOKMARK_FOLDER = { id: DEFAULT_BOOKMARK_FOLDER_ID, name: 'General' };
-
-function makeBookmarkFolderId(name) {
-  return `folder_${String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'custom'}_${Date.now()}`;
+function getFavicon(url) {
+  try { return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=32`; } catch { return ''; }
+}
+function makeBookmarkFolder(name = 'General') {
+  return {
+    id: `folder_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    name: String(name || 'General').trim() || 'General',
+    createdAt: Date.now(),
+  };
+}
+function normalizeBookmarkFolder(folder, fallbackName = 'General') {
+  return {
+    id: folder?.id || makeBookmarkFolder(fallbackName).id,
+    name: String(folder?.name || fallbackName || 'General').trim() || 'General',
+    createdAt: Number(folder?.createdAt) || Date.now(),
+  };
 }
 function getBookmarkFolders() {
-  const saved = Store.get('bookmarkFolders');
-  const folders = Array.isArray(saved) ? saved.filter(folder => folder && folder.id && folder.name) : [];
-  const hasDefault = folders.some(folder => folder.id === DEFAULT_BOOKMARK_FOLDER_ID);
-  return hasDefault ? folders : [DEFAULT_BOOKMARK_FOLDER, ...folders];
+  let folders = Store.get('bookmarkFolders');
+  if (!Array.isArray(folders) || !folders.length) {
+    folders = [{ id: DEFAULT_BOOKMARK_FOLDER_ID, name: 'General', createdAt: Date.now() }];
+    Store.set('bookmarkFolders', folders);
+  }
+  const seen = new Set();
+  const normalized = folders.map((folder, index) => normalizeBookmarkFolder(folder, index === 0 ? 'General' : `Folder ${index + 1}`))
+    .filter(folder => {
+      if (seen.has(folder.id)) return false;
+      seen.add(folder.id);
+      return true;
+    });
+  if (!normalized.some(folder => folder.id === DEFAULT_BOOKMARK_FOLDER_ID)) {
+    normalized.unshift({ id: DEFAULT_BOOKMARK_FOLDER_ID, name: 'General', createdAt: Date.now() });
+  }
+  Store.set('bookmarkFolders', normalized);
+  return normalized;
 }
 function setBookmarkFolders(folders) {
-  Store.set('bookmarkFolders', getNormalizedBookmarkFolders(folders));
-}
-function getNormalizedBookmarkFolders(folders = getBookmarkFolders()) {
-  const seen = new Set();
-  const normalized = [];
-  [DEFAULT_BOOKMARK_FOLDER, ...(Array.isArray(folders) ? folders : [])].forEach(folder => {
-    if (!folder?.id || !folder?.name || seen.has(folder.id)) return;
-    seen.add(folder.id);
-    normalized.push({ id: folder.id, name: String(folder.name).trim() || 'Untitled' });
-  });
-  return normalized;
+  Store.set('bookmarkFolders', folders);
 }
 function getBookmarks() {
   const folders = getBookmarkFolders();
-  const folderIds = new Set(folders.map(folder => folder.id));
-  const raw = Store.get('bookmarks') ?? [];
-  if (!Array.isArray(raw)) return [];
-  return raw.map(bookmark => ({
-    name: bookmark.name ?? 'Untitled',
-    url: bookmark.url ?? '',
-    folderId: folderIds.has(bookmark.folderId) ? bookmark.folderId : DEFAULT_BOOKMARK_FOLDER_ID,
-  })).filter(bookmark => bookmark.url);
+  const validFolderIds = new Set(folders.map(folder => folder.id));
+  const bms = Store.get('bookmarks') ?? [];
+  const normalized = (Array.isArray(bms) ? bms : []).map(bm => ({
+    name: String(bm?.name ?? '').trim(),
+    url: String(bm?.url ?? '').trim(),
+    folderId: validFolderIds.has(bm?.folderId) ? bm.folderId : DEFAULT_BOOKMARK_FOLDER_ID,
+  })).filter(bm => bm.name && bm.url);
+  Store.set('bookmarks', normalized);
+  return normalized;
 }
 function setBookmarks(bookmarks) {
   Store.set('bookmarks', bookmarks);
-}
-function getActiveBookmarkFolderId() {
-  const folders = getBookmarkFolders();
-  const saved = Store.get('activeBookmarkFolderId') ?? 'all';
-  if (saved === 'all' || folders.some(folder => folder.id === saved)) return saved;
-  return 'all';
-}
-function getBookmarkFolderName(folderId) {
-  if (folderId === 'all') return 'All';
-  return getBookmarkFolders().find(folder => folder.id === folderId)?.name ?? DEFAULT_BOOKMARK_FOLDER.name;
-}
-function getFavicon(url) {
-  try { return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=32`; } catch { return ''; }
 }
 function moveBookmark(fromIndex, toIndex) {
   const list = getBookmarks();
@@ -684,13 +686,13 @@ function moveBookmark(fromIndex, toIndex) {
   list.splice(toIndex, 0, item);
   setBookmarks(list);
 }
-
-// Pencil SVG icon
-const PENCIL_SVG = `<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M11.5 1.5a2.121 2.121 0 0 1 3 3L5 14H2v-3L11.5 1.5z"/></svg>`;
-
-function renderBookmarkFolderSelect(selectedId = DEFAULT_BOOKMARK_FOLDER_ID) {
+function folderNameById(folderId, folders = getBookmarkFolders()) {
+  return folders.find(folder => folder.id === folderId)?.name ?? 'General';
+}
+function populateBookmarkFolderSelect(selectedId) {
   if (!bmFolderSelect) return;
   const folders = getBookmarkFolders();
+  const current = selectedId || bmFolderSelect.value || Store.get('activeBookmarkFolderId') || DEFAULT_BOOKMARK_FOLDER_ID;
   bmFolderSelect.innerHTML = '';
   folders.forEach(folder => {
     const opt = document.createElement('option');
@@ -698,116 +700,108 @@ function renderBookmarkFolderSelect(selectedId = DEFAULT_BOOKMARK_FOLDER_ID) {
     opt.textContent = folder.name;
     bmFolderSelect.appendChild(opt);
   });
-  bmFolderSelect.value = folders.some(folder => folder.id === selectedId) ? selectedId : DEFAULT_BOOKMARK_FOLDER_ID;
+  bmFolderSelect.value = folders.some(folder => folder.id === current) ? current : folders[0].id;
 }
-function renderBookmarkFolderTabs() {
-  if (!bookmarkFolderTabs) return;
-  const active = getActiveBookmarkFolderId();
-  const bms = getBookmarks();
-  const folders = [{ id: 'all', name: 'All' }, ...getBookmarkFolders()];
-  bookmarkFolderTabs.innerHTML = '';
+function renderBookmarkFolders(folders, bookmarks) {
+  if (!bmFolderList) return;
+  bmFolderList.innerHTML = '';
   folders.forEach(folder => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = `bookmark-folder-tab${folder.id === active ? ' active' : ''}`;
-    const count = folder.id === 'all' ? bms.length : bms.filter(bm => bm.folderId === folder.id).length;
-    btn.textContent = `${folder.name} ${count}`;
-    btn.addEventListener('click', () => {
-      Store.set('activeBookmarkFolderId', folder.id);
-      loadBookmarks();
-    });
-    bookmarkFolderTabs.appendChild(btn);
-  });
-}
-function renderBookmarkFolderManager() {
-  if (!bmFolderManageList) return;
-  const folders = getBookmarkFolders();
-  const bms = getBookmarks();
-  bmFolderManageList.innerHTML = '';
-  folders.forEach(folder => {
+    const count = bookmarks.filter(bm => bm.folderId === folder.id).length;
     const row = document.createElement('div');
     row.className = 'bm-folder-row';
 
     const name = document.createElement('span');
-    name.className = 'bm-folder-row-name';
-    const count = bms.filter(bm => bm.folderId === folder.id).length;
-    name.textContent = `${folder.name} (${count})`;
+    name.className = 'bm-folder-name';
+    name.textContent = folder.name;
 
-    const actions = document.createElement('div');
-    actions.className = 'bm-folder-row-actions';
+    const meta = document.createElement('span');
+    meta.className = 'bm-folder-count';
+    meta.textContent = `${count} ${count === 1 ? 'bookmark' : 'bookmarks'}`;
 
-    if (folder.id !== DEFAULT_BOOKMARK_FOLDER_ID) {
-      const rename = document.createElement('button');
-      rename.type = 'button';
-      rename.className = 'bm-folder-row-btn';
-      rename.textContent = 'Rename';
-      rename.addEventListener('click', () => {
-        const nextName = window.prompt('Rename folder', folder.name)?.trim();
-        if (!nextName) return;
-        const next = getBookmarkFolders().map(item => item.id === folder.id ? { ...item, name: nextName } : item);
-        setBookmarkFolders(next);
-        loadBookmarks();
-      });
+    const rename = document.createElement('button');
+    rename.className = 'bm-folder-action';
+    rename.type = 'button';
+    rename.textContent = 'Rename';
 
-      const del = document.createElement('button');
-      del.type = 'button';
-      del.className = 'bm-folder-row-btn danger';
-      del.textContent = 'Delete';
-      del.addEventListener('click', () => {
-        const ok = window.confirm(`Delete "${folder.name}"? Bookmarks in this folder will move to General.`);
-        if (!ok) return;
-        setBookmarkFolders(getBookmarkFolders().filter(item => item.id !== folder.id));
-        setBookmarks(getBookmarks().map(bm => bm.folderId === folder.id ? { ...bm, folderId: DEFAULT_BOOKMARK_FOLDER_ID } : bm));
-        if (Store.get('activeBookmarkFolderId') === folder.id) Store.set('activeBookmarkFolderId', 'all');
-        loadBookmarks();
-      });
-      actions.appendChild(rename);
-      actions.appendChild(del);
-    }
+    const del = document.createElement('button');
+    del.className = 'bm-folder-action danger';
+    del.type = 'button';
+    del.textContent = 'Delete';
+    del.disabled = folder.id === DEFAULT_BOOKMARK_FOLDER_ID;
+    del.title = del.disabled ? 'The General folder cannot be deleted' : 'Delete folder';
 
     row.appendChild(name);
-    row.appendChild(actions);
-    bmFolderManageList.appendChild(row);
+    row.appendChild(meta);
+    row.appendChild(rename);
+    row.appendChild(del);
+    bmFolderList.appendChild(row);
+
+    rename.addEventListener('click', () => {
+      const nextName = window.prompt('Rename folder', folder.name)?.trim();
+      if (!nextName) return;
+      const nextFolders = getBookmarkFolders().map(item => item.id === folder.id ? { ...item, name: nextName } : item);
+      setBookmarkFolders(nextFolders);
+      loadBookmarks();
+    });
+    del.addEventListener('click', () => {
+      if (folder.id === DEFAULT_BOOKMARK_FOLDER_ID) return;
+      const ok = window.confirm(`Delete "${folder.name}"? Bookmarks in this folder will move to General.`);
+      if (!ok) return;
+      setBookmarkFolders(getBookmarkFolders().filter(item => item.id !== folder.id));
+      setBookmarks(getBookmarks().map(bm => bm.folderId === folder.id ? { ...bm, folderId: DEFAULT_BOOKMARK_FOLDER_ID } : bm));
+      loadBookmarks();
+    });
   });
 }
-function createBookmarkFolder() {
-  const name = (bmFolderNameInput?.value || '').trim();
-  if (!name) return;
-  const folders = getBookmarkFolders();
-  if (folders.some(folder => folder.name.toLowerCase() === name.toLowerCase())) {
-    showToast('Folder already exists');
-    return;
-  }
-  const folder = { id: makeBookmarkFolderId(name), name };
-  setBookmarkFolders([...folders, folder]);
-  if (bmFolderNameInput) bmFolderNameInput.value = '';
-  renderBookmarkFolderSelect(folder.id);
-  Store.set('activeBookmarkFolderId', folder.id);
-  loadBookmarks();
-  showToast(`Folder added: ${name}`);
+
+// Pencil SVG icon
+const PENCIL_SVG = `<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M11.5 1.5a2.121 2.121 0 0 1 3 3L5 14H2v-3L11.5 1.5z"/></svg>`;
+
+function getActiveBookmarkFolderId(folders = getBookmarkFolders()) {
+  const saved = Store.get('activeBookmarkFolderId');
+  return folders.some(folder => folder.id === saved) ? saved : folders[0]?.id || DEFAULT_BOOKMARK_FOLDER_ID;
 }
 
-function loadBookmarks() {
-  const bms = getBookmarks();
-  const activeFolderId = getActiveBookmarkFolderId();
-  const visibleBookmarks = activeFolderId === 'all' ? bms : bms.filter(bm => bm.folderId === activeFolderId);
-  if (bookmarkList) bookmarkList.innerHTML = '';
-  if (bmManageList) bmManageList.innerHTML = '';
+function renderBookmarkWidget(bookmarks, folders) {
+  if (!bookmarkList) return;
+  bookmarkList.innerHTML = '';
+  if (bookmarkFolderTabs) bookmarkFolderTabs.innerHTML = '';
+  const activeFolderId = getActiveBookmarkFolderId(folders);
+  Store.set('activeBookmarkFolderId', activeFolderId);
 
-  renderBookmarkFolderSelect();
-  renderBookmarkFolderTabs();
-  renderBookmarkFolderManager();
+  const folderBar = bookmarkFolderTabs || document.createElement('div');
+  folderBar.className = 'bm-widget-folder-tabs';
+  folders.forEach(folder => {
+    const count = bookmarks.filter(bm => bm.folderId === folder.id).length;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'bm-widget-folder-tab';
+    button.classList.toggle('active', folder.id === activeFolderId);
+    button.textContent = folder.name;
+    button.title = `${folder.name} · ${count} ${count === 1 ? 'bookmark' : 'bookmarks'}`;
+    button.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      Store.set('activeBookmarkFolderId', folder.id);
+      populateBookmarkFolderSelect(folder.id);
+      renderBookmarkWidget(getBookmarks(), getBookmarkFolders());
+    });
+    folderBar.appendChild(button);
+  });
+  if (!bookmarkFolderTabs) bookmarkList.appendChild(folderBar);
 
-  if (bookmarkList && !visibleBookmarks.length) {
+  const selectedBookmarks = bookmarks.filter(bm => bm.folderId === activeFolderId);
+  if (!selectedBookmarks.length) {
     const empty = document.createElement('div');
-    empty.className = 'bookmark-empty';
-    empty.textContent = activeFolderId === 'all' ? 'No bookmarks yet' : `No bookmarks in ${getBookmarkFolderName(activeFolderId)}`;
+    empty.className = 'bm-widget-empty';
+    empty.textContent = 'No bookmarks in this folder';
     bookmarkList.appendChild(empty);
+    return;
   }
 
-  visibleBookmarks.forEach((bm) => {
+  selectedBookmarks.forEach((bm) => {
     const a = document.createElement('a');
-    a.className = 'bm-item'; a.href = bm.url; a.title = bm.url;
+    a.className = 'bm-item'; a.href = bm.url; a.title = `${bm.name} · ${bm.url}`;
     const fav = getFavicon(bm.url);
     if (fav) {
       const img = document.createElement('img');
@@ -815,15 +809,27 @@ function loadBookmarks() {
       a.appendChild(img);
     }
     a.appendChild(document.createTextNode(bm.name));
-    bookmarkList?.appendChild(a);
+    bookmarkList.appendChild(a);
   });
+}
+
+function loadBookmarks() {
+  const folders = getBookmarkFolders();
+  const bms = getBookmarks();
+  bookmarkList.innerHTML = '';
+  bmManageList.innerHTML = '';
+  populateBookmarkFolderSelect();
+  renderBookmarkFolders(folders, bms);
+  renderBookmarkWidget(bms, folders);
 
   bms.forEach((bm, i) => {
+    // ── Manage panel row ──
     const row = document.createElement('div');
     row.className = 'bm-row';
     row.dataset.index = String(i);
     row.draggable = true;
 
+    // Header line: [pencil] [number] [name] [folder] [delete]
     const header = document.createElement('div');
     header.className = 'bm-row-header';
 
@@ -841,9 +847,9 @@ function loadBookmarks() {
     collapsedName.className = 'bm-row-collapsed-name';
     collapsedName.textContent = bm.name;
 
-    const folderBadge = document.createElement('span');
-    folderBadge.className = 'bm-folder-badge';
-    folderBadge.textContent = getBookmarkFolderName(bm.folderId);
+    const collapsedFolder = document.createElement('span');
+    collapsedFolder.className = 'bm-row-folder-name';
+    collapsedFolder.textContent = folderNameById(bm.folderId, folders);
 
     const del = document.createElement('button');
     del.className = 'bm-del'; del.textContent = '✕'; del.title = 'Delete';
@@ -851,9 +857,10 @@ function loadBookmarks() {
     header.appendChild(expandToggle);
     header.appendChild(orderBadge);
     header.appendChild(collapsedName);
-    header.appendChild(folderBadge);
+    header.appendChild(collapsedFolder);
     header.appendChild(del);
 
+    // Expanded edit section
     const expandedWrap = document.createElement('div');
     expandedWrap.className = 'bm-row-expanded';
 
@@ -874,13 +881,13 @@ function loadBookmarks() {
 
     const folderSelect = document.createElement('select');
     folderSelect.className = 'input select-input';
-    getBookmarkFolders().forEach(folder => {
+    folders.forEach(folder => {
       const opt = document.createElement('option');
       opt.value = folder.id;
       opt.textContent = folder.name;
       folderSelect.appendChild(opt);
     });
-    folderSelect.value = bm.folderId || DEFAULT_BOOKMARK_FOLDER_ID;
+    folderSelect.value = bm.folderId;
 
     const applyBtn = document.createElement('button');
     applyBtn.className = 'bm-apply-btn'; applyBtn.type = 'button'; applyBtn.textContent = 'Apply';
@@ -895,8 +902,9 @@ function loadBookmarks() {
 
     row.appendChild(header);
     row.appendChild(expandedWrap);
-    bmManageList?.appendChild(row);
+    bmManageList.appendChild(row);
 
+    // ── Expand/collapse ──
     function setExpanded(on) {
       row.classList.toggle('bm-row-expanded-state', on);
       if (on) {
@@ -912,6 +920,7 @@ function loadBookmarks() {
       setExpanded(!row.classList.contains('bm-row-expanded-state'));
     });
 
+    // ── Delete ──
     del.addEventListener('click', (e) => {
       e.stopPropagation();
       const list = getBookmarks();
@@ -920,20 +929,24 @@ function loadBookmarks() {
       loadBookmarks();
     });
 
+    // ── Apply edits ──
     applyBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const idx = +row.dataset.index;
       const name = (nameInput.value || '').trim();
       let url = (urlInput.value || '').trim();
+      const folderId = folderSelect.value || DEFAULT_BOOKMARK_FOLDER_ID;
       if (!name || !url) return;
       if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
       const list = getBookmarks();
       if (idx < 0 || idx >= list.length) return;
-      list[idx] = { name, url, folderId: folderSelect.value || DEFAULT_BOOKMARK_FOLDER_ID };
+      list[idx] = { name, url, folderId };
       setBookmarks(list);
+      Store.set('activeBookmarkFolderId', folderId);
       loadBookmarks();
     });
 
+    // ── Drag reorder ──
     row.addEventListener('dragstart', (e) => {
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', String(i));
@@ -953,21 +966,38 @@ function loadBookmarks() {
 document.getElementById('save-bm-btn').addEventListener('click', () => {
   const name = bmNameInput.value.trim();
   let url = bmUrlInput.value.trim();
+  const folderId = bmFolderSelect?.value || DEFAULT_BOOKMARK_FOLDER_ID;
   if (!name || !url) return;
   if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
   const bms = getBookmarks();
-  bms.push({ name, url, folderId: bmFolderSelect?.value || DEFAULT_BOOKMARK_FOLDER_ID });
+  bms.push({ name, url, folderId });
   setBookmarks(bms);
+  Store.set('activeBookmarkFolderId', folderId);
   bmNameInput.value = ''; bmUrlInput.value = '';
   loadBookmarks();
 });
-if (saveBmFolderBtn) saveBmFolderBtn.addEventListener('click', createBookmarkFolder);
-if (bmFolderNameInput) {
-  bmFolderNameInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') createBookmarkFolder();
-  });
-}
+document.getElementById('add-bm-folder-btn')?.addEventListener('click', () => {
+  const name = bmFolderNameInput?.value.trim();
+  if (!name) return;
+  const folders = getBookmarkFolders();
+  const folder = makeBookmarkFolder(name);
+  folders.push(folder);
+  setBookmarkFolders(folders);
+  Store.set('activeBookmarkFolderId', folder.id);
+  if (bmFolderNameInput) bmFolderNameInput.value = '';
+  loadBookmarks();
+});
+bmFolderSelect?.addEventListener('change', () => { Store.set('activeBookmarkFolderId', bmFolderSelect.value); renderBookmarkWidget(getBookmarks(), getBookmarkFolders()); });
 document.getElementById('add-bm-btn').addEventListener('click', () => openPanel('bookmark-panel'));
+
+// One-time repair for builds that accidentally saved the bookmark widget as a
+// very large transparent box. This only clears the bookmark widget dimensions;
+// all bookmarks, folders, and other widget settings remain intact.
+if (!Store.get('bookmarkFolderWidgetRepair_v5')) {
+  Store.set('widgetSize_bookmarks', null);
+  Store.set('bookmarkFolderWidgetRepair_v5', true);
+}
+
 loadBookmarks();
 
 // ─── Recently Visited ────────────────────────────────────────────────
@@ -1023,6 +1053,112 @@ setInterval(loadMediaStatus, 5000);
 
 // ─── Widget System ──────────────────────────────────────────────────
 const WIDGETS = ['clock','search','bookmarks','recent','media','notes'];
+
+// ─── Per-widget Appearance ─────────────────────────────────────────
+const WIDGET_APPEARANCE_DEFAULTS = {
+  opacity: 100,
+  radius: 8,
+  background: true,
+  border: true,
+  title: true,
+  accent: DEFAULT_ACCENT,
+};
+const WIDGET_LABELS = {
+  clock: 'Clock',
+  search: 'Search',
+  bookmarks: 'Bookmarks',
+  recent: 'Recently Visited',
+  media: 'Media',
+  notes: 'Notes',
+};
+function widgetAppearanceKey(id) { return `widgetAppearance_${id}`; }
+function getWidgetAppearance(id) {
+  return { ...WIDGET_APPEARANCE_DEFAULTS, ...(Store.get(widgetAppearanceKey(id)) ?? {}) };
+}
+function setWidgetAppearance(id, settings) {
+  const next = { ...getWidgetAppearance(id), ...settings };
+  next.opacity = Math.min(100, Math.max(20, Number(next.opacity) || WIDGET_APPEARANCE_DEFAULTS.opacity));
+  next.radius = Math.min(40, Math.max(0, Number(next.radius) || 0));
+  next.accent = normalizeHexColor(next.accent, DEFAULT_ACCENT);
+  Store.set(widgetAppearanceKey(id), next);
+  applyWidgetAppearance(id);
+}
+function applyWidgetAppearance(id) {
+  const el = document.getElementById(`widget-${id}`);
+  if (!el) return;
+  const settings = getWidgetAppearance(id);
+  el.style.opacity = String(settings.opacity / 100);
+  el.style.setProperty('--widget-radius', `${settings.radius}px`);
+  el.style.setProperty('--widget-accent', normalizeHexColor(settings.accent, DEFAULT_ACCENT));
+  el.style.setProperty('--accent', normalizeHexColor(settings.accent, DEFAULT_ACCENT));
+  el.classList.toggle('widget-no-bg', !settings.background);
+  el.classList.toggle('widget-no-border', !settings.border);
+  el.classList.toggle('widget-no-title', !settings.title);
+  el.classList.toggle('widget-appearance-bg', !!settings.background);
+}
+function applyAllWidgetAppearances() {
+  WIDGETS.forEach(applyWidgetAppearance);
+}
+function collectWidgetAppearances() {
+  const appearances = {};
+  WIDGETS.forEach(id => { appearances[id] = getWidgetAppearance(id); });
+  return appearances;
+}
+function loadWidgetAppearanceControls() {
+  const select = document.getElementById('widget-custom-select');
+  if (!select) return;
+  const id = WIDGETS.includes(select.value) ? select.value : WIDGETS[0];
+  select.value = id;
+  const settings = getWidgetAppearance(id);
+  const opacityRange = document.getElementById('widget-opacity-range');
+  const opacityVal = document.getElementById('widget-opacity-val');
+  const radiusRange = document.getElementById('widget-radius-range');
+  const radiusVal = document.getElementById('widget-radius-val');
+  const accentColor = document.getElementById('widget-accent-color');
+  const bgToggle = document.getElementById('widget-bg-toggle');
+  const borderToggle = document.getElementById('widget-border-toggle');
+  const titleToggle = document.getElementById('widget-title-toggle');
+  if (opacityRange) opacityRange.value = settings.opacity;
+  if (opacityVal) opacityVal.textContent = `${settings.opacity}%`;
+  if (radiusRange) radiusRange.value = settings.radius;
+  if (radiusVal) radiusVal.textContent = `${settings.radius}px`;
+  if (accentColor) accentColor.value = normalizeHexColor(settings.accent, DEFAULT_ACCENT);
+  if (bgToggle) bgToggle.checked = !!settings.background;
+  if (borderToggle) borderToggle.checked = !!settings.border;
+  if (titleToggle) titleToggle.checked = !!settings.title;
+}
+function bindWidgetAppearanceControls() {
+  const select = document.getElementById('widget-custom-select');
+  if (!select) return;
+  const activeId = () => WIDGETS.includes(select.value) ? select.value : WIDGETS[0];
+  const bindInput = (id, key, read, after) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', () => { setWidgetAppearance(activeId(), { [key]: read(el) }); if (after) after(el); });
+    el.addEventListener('change', () => { setWidgetAppearance(activeId(), { [key]: read(el) }); if (after) after(el); });
+  };
+  select.addEventListener('change', loadWidgetAppearanceControls);
+  bindInput('widget-opacity-range', 'opacity', el => +el.value, el => {
+    const val = document.getElementById('widget-opacity-val');
+    if (val) val.textContent = `${el.value}%`;
+  });
+  bindInput('widget-radius-range', 'radius', el => +el.value, el => {
+    const val = document.getElementById('widget-radius-val');
+    if (val) val.textContent = `${el.value}px`;
+  });
+  bindInput('widget-accent-color', 'accent', el => el.value);
+  bindInput('widget-bg-toggle', 'background', el => el.checked);
+  bindInput('widget-border-toggle', 'border', el => el.checked);
+  bindInput('widget-title-toggle', 'title', el => el.checked);
+  document.getElementById('widget-reset-appearance-btn')?.addEventListener('click', () => {
+    Store.set(widgetAppearanceKey(activeId()), WIDGET_APPEARANCE_DEFAULTS);
+    applyWidgetAppearance(activeId());
+    loadWidgetAppearanceControls();
+    showToast(`${WIDGET_LABELS[activeId()] ?? 'Widget'} appearance reset`);
+  });
+  loadWidgetAppearanceControls();
+}
+
 let layoutMode = false;
 
 const DEFAULT_POSITIONS = {
@@ -1515,14 +1651,15 @@ function getProfiles()        { return Store.get('layoutProfiles') ?? {}; }
 function setProfiles(profiles){ Store.set('layoutProfiles', profiles); }
 
 function captureLayoutProfile() {
-  const positions = {}, hidden = {}, sizes = {};
+  const positions = {}, hidden = {}, sizes = {}, appearances = {};
   WIDGETS.forEach(id => {
     positions[id] = currentWidgetPosition(id);
     hidden[id]    = !!Store.get(widgetHiddenKey(id));
     sizes[id]     = Store.get(sizeKey(id));
+    appearances[id] = getWidgetAppearance(id);
   });
   return {
-    positions, hidden, sizes,
+    positions, hidden, sizes, appearances,
     backgroundDetails: { bgImage: Store.get('bgImage'), bgPreset: Store.get('bgPreset') ?? 0, bgOverlay: Store.get('bgOverlay') ?? 35, bgBlur: Store.get('bgBlur') ?? 0 },
     clockDetails:      { hideGreeting: !!Store.get('hideGreeting'), hideDate: !!Store.get('hideDate') },
     notesMarkdown:     Store.get('notesMarkdown') ?? '',
@@ -1546,6 +1683,7 @@ function applyLayoutProfile(profile) {
       Store.set('notesMarkdown', profile.notesMarkdown);
       Store.set('notesList', [makeNote(profile.notesMarkdown)]);
     }
+    if (profile.appearances?.[id]) { Store.set(widgetAppearanceKey(id), profile.appearances[id]); applyWidgetAppearance(id); }
     Store.set(widgetHiddenKey(id), !!profile.hidden?.[id]); applyWidgetVisibility(id);
   });
   if (profile.backgroundDetails) {
@@ -1931,6 +2069,8 @@ if (deleteThemeBtn) {
 }
 
 renderThemePresets();
+applyAllWidgetAppearances();
+bindWidgetAppearanceControls();
 
 const backdrop = document.getElementById('backdrop');
 let activePanel = null;
@@ -1957,7 +2097,10 @@ function closePanel(id) {
 
 document.getElementById('bg-btn').addEventListener('click',       () => activePanel === 'bg-panel'       ? closePanel('bg-panel')       : openPanel('bg-panel'));
 document.getElementById('bookmark-btn').addEventListener('click', () => activePanel === 'bookmark-panel' ? closePanel('bookmark-panel') : openPanel('bookmark-panel'));
-document.getElementById('settings-btn').addEventListener('click', () => activePanel === 'settings-panel' ? closePanel('settings-panel') : openPanel('settings-panel'));
+document.getElementById('settings-btn').addEventListener('click', () => {
+  if (activePanel === 'settings-panel') closePanel('settings-panel');
+  else { openPanel('settings-panel'); loadWidgetAppearanceControls(); }
+});
 document.getElementById('layout-btn').addEventListener('click',   () => activePanel === 'layout-panel'   ? closePanel('layout-panel')   : openPanel('layout-panel'));
 
 const layoutCollapseBtn = document.getElementById('layout-collapse-btn');
