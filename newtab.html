@@ -32,6 +32,16 @@
     <div id="greeting" class="greeting">Good morning.</div>
   </div>
 
+
+  <div class="widget" id="widget-search" data-widget="search">
+    <div class="widget-drag-handle" title="Drag to reposition"></div>
+    <form class="search-widget" id="search-form" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input id="search-input" class="search-input" type="search" placeholder="Search or enter URL" autocomplete="off" spellcheck="false" aria-label="Search the web or enter a URL"/>
+      <button id="search-submit" class="search-submit" type="submit" aria-label="Search">↵</button>
+    </form>
+  </div>
+
   <div class="widget" id="widget-bookmarks" data-widget="bookmarks">
     <div class="widget-drag-handle" title="Drag to reposition"></div>
     <section class="bookmarks-bar" id="bookmarks-bar">
@@ -60,9 +70,21 @@
   <div class="widget" id="widget-notes" data-widget="notes">
     <div class="widget-drag-handle" title="Drag to reposition"></div>
     <section class="mini-widget notes-widget">
-      <div class="mini-widget-title">Sticky Note</div>
-      <textarea id="notes-input" class="notes-input" placeholder="Write your note (Markdown supported)..."></textarea>
+      <div class="notes-header">
+        <div class="mini-widget-title">Sticky Notes</div>
+        <span id="notes-save-status" class="notes-save-status" aria-live="polite">Saved</span>
+      </div>
+      <div class="notes-control-row">
+        <select id="notes-select" class="notes-select" aria-label="Select note"></select>
+        <button class="notes-icon-btn" id="notes-add-btn" type="button" title="New note" aria-label="New note">＋</button>
+        <button class="notes-icon-btn" id="notes-pin-btn" type="button" title="Pin note" aria-label="Pin note">☆</button>
+        <button class="notes-icon-btn danger" id="notes-delete-btn" type="button" title="Delete note" aria-label="Delete note">✕</button>
+      </div>
+      <textarea id="notes-input" class="notes-input" placeholder="Write your note...
+- [ ] Add checklist items
+- [x] Markdown supported"></textarea>
       <div class="notes-actions">
+        <button class="action-btn secondary-action notes-toggle" id="notes-preview-toggle-btn" type="button">Hide Preview</button>
         <button class="action-btn secondary-action notes-clear" id="notes-clear-btn" type="button">Clear</button>
       </div>
       <div id="notes-preview" class="notes-preview"></div>
@@ -136,6 +158,10 @@
         <label class="toggle-switch"><input type="checkbox" id="toggle-widget-clock" checked/><span class="toggle-slider"></span></label>
       </div>
       <div class="toggle-row toggle-row-spread" style="margin-top:10px">
+        <span class="toggle-label">Search</span>
+        <label class="toggle-switch"><input type="checkbox" id="toggle-widget-search" checked/><span class="toggle-slider"></span></label>
+      </div>
+      <div class="toggle-row toggle-row-spread" style="margin-top:10px">
         <span class="toggle-label">Bookmarks</span>
         <label class="toggle-switch"><input type="checkbox" id="toggle-widget-bookmarks" checked/><span class="toggle-slider"></span></label>
       </div>
@@ -152,6 +178,17 @@
         <label class="toggle-switch"><input type="checkbox" id="toggle-widget-notes" checked/><span class="toggle-slider"></span></label>
       </div>
       <div class="divider"></div>
+      <p class="label">Search</p>
+      <select class="input select-input" id="search-engine-select">
+        <option value="google">Google</option>
+        <option value="duckduckgo">DuckDuckGo</option>
+        <option value="bing">Bing</option>
+        <option value="youtube">YouTube</option>
+        <option value="github">GitHub</option>
+        <option value="wikipedia">Wikipedia</option>
+      </select>
+      <p class="settings-help">Tip: use shortcuts like <strong>yt music</strong>, <strong>gh react</strong>, <strong>w javascript</strong>, or press <strong>/</strong> to focus search.</p>
+      <div class="divider"></div>
       <p class="label">Recently Visited</p>
       <input class="input" type="number" id="recent-count-input" min="1" max="12" value="5"/>
       <div class="divider"></div>
@@ -163,6 +200,12 @@
         <span class="toggle-label">Show Brand</span>
         <label class="toggle-switch"><input type="checkbox" id="toggle-brand" checked/><span class="toggle-slider"></span></label>
       </div>
+      <div class="divider"></div>
+      <p class="label">Backup & Restore</p>
+      <button class="action-btn" id="export-settings-btn" type="button">Export Settings</button>
+      <button class="action-btn secondary-action" id="import-settings-btn" type="button">Import Settings</button>
+      <input type="file" id="import-settings-file" accept="application/json,.json" hidden/>
+      <p class="settings-help">Exports backgrounds, bookmarks, notes, widget positions, profiles, fonts, and preferences as a JSON backup.</p>
     </div>
   </aside>
 

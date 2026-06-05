@@ -109,6 +109,26 @@ body.layout-mode .widget {
   border-radius: 8px;
   cursor: move;
 }
+body.layout-mode .widget a,
+body.layout-mode .widget button,
+body.layout-mode .widget input,
+body.layout-mode .widget textarea,
+body.layout-mode .widget select,
+body.layout-mode .widget label {
+  pointer-events: none;
+}
+body.layout-mode .widget .widget-drag-handle,
+body.layout-mode .widget .widget-resize-handle {
+  pointer-events: auto;
+}
+body.layout-mode .widget::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  border-radius: inherit;
+  pointer-events: none;
+}
 
 /* ── Snap Zone Overlay ───────────────────────────────────── */
 #snap-zone-overlay {
@@ -207,6 +227,73 @@ body.layout-mode .widget:hover .widget-resize-handle { opacity: 1; }
   margin-top: 6px;
   animation: fadeUp 1s ease both 0.4s;
 }
+
+
+/* ── Search Widget ───────────────────────────────────────── */
+#widget-search {
+  width: min(560px, 86vw);
+  animation: fadeUp 1s ease both 0.45s;
+}
+.search-widget {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+}
+.search-icon {
+  width: 22px;
+  flex: 0 0 auto;
+  text-align: center;
+  color: var(--accent);
+  font-family: var(--font-ui);
+  font-size: 18px;
+  opacity: 0.85;
+}
+.search-input {
+  min-width: 0;
+  flex: 1 1 auto;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+.search-input::placeholder { color: var(--text-dim); }
+.search-input::-webkit-search-cancel-button { filter: invert(1); opacity: 0.45; }
+.search-submit {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 1px solid var(--glass-border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition: all 0.2s;
+}
+.search-submit:hover, .search-submit:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+.widget.widget-sized .search-widget { height: 100%; box-sizing: border-box; }
+.settings-help {
+  margin-top: -2px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.settings-help strong { color: var(--accent); font-weight: 400; }
 
 /* ── Bookmarks Widget ────────────────────────────────────── */
 #widget-bookmarks {
@@ -427,27 +514,69 @@ body.layout-mode .widget:hover .widget-resize-handle { opacity: 1; }
 .custom-font-delete { background: none; border: none; color: #e57373; cursor: pointer; font-size: 14px; }
 
 /* ── Notes Widget ───────────────────────────────────────── */
-.notes-widget .mini-widget-title { margin-bottom: 8px; }
+.notes-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-bottom: 8px;
+}
+.notes-widget .mini-widget-title { margin-bottom: 0; }
+.notes-save-status {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-dim); white-space: nowrap;
+}
+.notes-save-status.saving { color: var(--accent); }
+.notes-control-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.notes-select {
+  min-width: 0; flex: 1 1 auto; padding: 7px 10px;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.13);
+  border-radius: 8px; color: var(--text); font-family: var(--font-mono); font-size: 11px;
+  outline: none;
+}
+.notes-select:focus { border-color: var(--accent); }
+.notes-select option { background: #1a1826; color: #fff; }
+.notes-icon-btn {
+  width: 30px; height: 30px; flex: 0 0 auto;
+  border-radius: 8px; border: 1px solid var(--glass-border);
+  background: rgba(255,255,255,0.04); color: var(--text-dim);
+  cursor: pointer; transition: all 0.18s; font-family: var(--font-mono);
+}
+.notes-icon-btn:hover, .notes-icon-btn.active {
+  border-color: var(--accent); background: var(--accent-dim); color: var(--accent);
+}
+.notes-icon-btn.danger:hover { border-color: #e57373; background: rgba(229,115,115,0.12); color: #e57373; }
 .notes-input {
-  width: 100%; min-height: 90px; resize: vertical;
+  width: 100%; min-height: 96px; resize: vertical;
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.13);
   border-radius: 8px; padding: 10px 12px; color: var(--text);
   font-family: var(--font-mono); font-size: 12px; outline: none; margin-bottom: 10px;
 }
+.notes-input:focus { border-color: rgba(201,169,110,0.55); }
 .notes-actions { display: flex; gap: 8px; margin-bottom: 10px; }
 .notes-actions .action-btn { width: auto; padding: 8px 12px; flex: 1; }
 .notes-preview {
   font-family: var(--font-ui); font-size: 12px; color: var(--text);
-  line-height: 1.4; white-space: pre-wrap;
+  line-height: 1.45; white-space: normal;
+  max-height: 180px; overflow-y: auto;
 }
+.notes-preview.hidden { display: none; }
+.notes-preview p { margin: 0 0 6px; }
+.notes-preview strong { color: #fff; }
+.notes-preview em { color: rgba(255,255,255,0.82); }
+.notes-preview a { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(201,169,110,0.35); }
 .notes-preview code {
   background: rgba(201,169,110,0.14); border: 1px solid rgba(201,169,110,0.25);
   padding: 2px 6px; border-radius: 6px; font-family: var(--font-mono);
 }
-.notes-preview pre {
-  overflow: auto; padding: 10px;
-  background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+.notes-check, .notes-bullet {
+  display: flex; align-items: flex-start; gap: 7px; margin: 0 0 6px;
 }
+.notes-check input {
+  margin-top: 2px; accent-color: var(--accent); pointer-events: none;
+}
+.notes-check.checked span {
+  color: var(--text-dim); text-decoration: line-through;
+}
+.notes-bullet::before { content: '•'; color: var(--accent); flex: 0 0 auto; }
+.notes-empty-preview { color: var(--text-dim); font-style: italic; }
 
 /* ── Layout Widget Rows ──────────────────────────────────── */
 .layout-widget-rows { display: flex; flex-direction: column; gap: 8px; }

@@ -246,11 +246,13 @@ const toggle12h            = document.getElementById('toggle-12h');
 const toggleGreeting       = document.getElementById('toggle-greeting');
 const toggleDate           = document.getElementById('toggle-date');
 const toggleWidgetClock    = document.getElementById('toggle-widget-clock');
+const toggleWidgetSearch   = document.getElementById('toggle-widget-search');
 const toggleWidgetBookmarks= document.getElementById('toggle-widget-bookmarks');
 const toggleWidgetRecent   = document.getElementById('toggle-widget-recent');
 const toggleWidgetMedia    = document.getElementById('toggle-widget-media');
 const toggleWidgetNotes    = document.getElementById('toggle-widget-notes');
 const recentCountInput     = document.getElementById('recent-count-input');
+const searchEngineSelect   = document.getElementById('search-engine-select');
 const toggleBrand          = document.getElementById('toggle-brand');
 const brandEl              = document.querySelector('.brand');
 const toggleAmPm           = document.getElementById('toggle-ampm');
@@ -283,6 +285,7 @@ function bindWidgetVisibilityToggle(toggle, id) {
   applyWidgetVisibility(id);
 }
 bindWidgetVisibilityToggle(toggleWidgetClock,     'clock');
+bindWidgetVisibilityToggle(toggleWidgetSearch,    'search');
 bindWidgetVisibilityToggle(toggleWidgetBookmarks, 'bookmarks');
 bindWidgetVisibilityToggle(toggleWidgetRecent,    'recent');
 bindWidgetVisibilityToggle(toggleWidgetMedia,     'media');
@@ -293,39 +296,280 @@ toggleBrand.checked = !Store.get('hideBrand');
 applyBrandVisibility();
 toggleBrand.addEventListener('change', () => { Store.set('hideBrand', !toggleBrand.checked); applyBrandVisibility(); });
 
+// ─── Search ─────────────────────────────────────────────────────────
+const searchForm  = document.getElementById('search-form');
+const searchInput = document.getElementById('search-input');
+
+const SEARCH_ENGINES = {
+  google:     { name: 'Google',     url: 'https://www.google.com/search?q=%s' },
+  duckduckgo: { name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=%s' },
+  bing:       { name: 'Bing',       url: 'https://www.bing.com/search?q=%s' },
+  youtube:    { name: 'YouTube',    url: 'https://www.youtube.com/results?search_query=%s' },
+  github:     { name: 'GitHub',     url: 'https://github.com/search?q=%s' },
+  wikipedia:  { name: 'Wikipedia',  url: 'https://en.wikipedia.org/wiki/Special:Search?search=%s' },
+};
+const SEARCH_SHORTCUTS = {
+  g: 'google', google: 'google',
+  d: 'duckduckgo', ddg: 'duckduckgo', duck: 'duckduckgo',
+  b: 'bing', bing: 'bing',
+  y: 'youtube', yt: 'youtube', youtube: 'youtube',
+  gh: 'github', git: 'github', github: 'github',
+  w: 'wikipedia', wiki: 'wikipedia', wikipedia: 'wikipedia',
+};
+
+function getDefaultSearchEngine() {
+  const saved = Store.get('searchEngine') ?? 'google';
+  return SEARCH_ENGINES[saved] ? saved : 'google';
+}
+function buildSearchUrl(engineKey, query) {
+  const engine = SEARCH_ENGINES[engineKey] ?? SEARCH_ENGINES.google;
+  return engine.url.replace('%s', encodeURIComponent(query));
+}
+function looksLikeUrl(query) {
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(query)) return true;
+  if (/^localhost(?::\d+)?(?:[/?#].*)?$/i.test(query)) return true;
+  return /^(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?(?:[/?#].*)?$/i.test(query);
+}
+function normalizeUrl(query) {
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(query)) return query;
+  if (/^localhost(?::\d+)?(?:[/?#].*)?$/i.test(query)) return `http://${query}`;
+  return `https://${query}`;
+}
+function resolveSearchDestination(rawValue) {
+  const value = rawValue.trim();
+  if (!value) return null;
+  if (!value.includes(' ') && looksLikeUrl(value)) return normalizeUrl(value);
+
+  const firstSpace = value.indexOf(' ');
+  if (firstSpace > 0) {
+    const shortcut = value.slice(0, firstSpace).toLowerCase();
+    const rest = value.slice(firstSpace + 1).trim();
+    if (rest && SEARCH_SHORTCUTS[shortcut]) return buildSearchUrl(SEARCH_SHORTCUTS[shortcut], rest);
+  }
+  return buildSearchUrl(getDefaultSearchEngine(), value);
+}
+
+if (searchEngineSelect) {
+  searchEngineSelect.value = getDefaultSearchEngine();
+  searchEngineSelect.addEventListener('change', () => {
+    Store.set('searchEngine', searchEngineSelect.value);
+    searchInput?.focus();
+  });
+}
+if (searchForm && searchInput) {
+  searchForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const destination = resolveSearchDestination(searchInput.value);
+    if (!destination) return;
+    window.location.href = destination;
+  });
+  document.addEventListener('keydown', (e) => {
+    if (layoutMode) return;
+    const tag = document.activeElement?.tagName?.toLowerCase();
+    const isTyping = tag === 'input' || tag === 'textarea' || document.activeElement?.isContentEditable;
+    if (e.key === '/' && !isTyping && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+    }
+  });
+}
+
 // ─── Notes ──────────────────────────────────────────────────────────
-const notesInput    = document.getElementById('notes-input');
-const notesPreview  = document.getElementById('notes-preview');
-const notesClearBtn = document.getElementById('notes-clear-btn');
+const notesInput            = document.getElementById('notes-input');
+const notesPreview          = document.getElementById('notes-preview');
+const notesClearBtn         = document.getElementById('notes-clear-btn');
+const notesSelect           = document.getElementById('notes-select');
+const notesAddBtn           = document.getElementById('notes-add-btn');
+const notesPinBtn           = document.getElementById('notes-pin-btn');
+const notesDeleteBtn        = document.getElementById('notes-delete-btn');
+const notesPreviewToggleBtn = document.getElementById('notes-preview-toggle-btn');
+const notesSaveStatus       = document.getElementById('notes-save-status');
+let notesSaveTimer = null;
 
 function escapeHtml(str) {
   return String(str).replace(/[&<>"]/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
 }
-function renderMarkdown(markdown) {
-  let html = escapeHtml(String(markdown ?? ''));
+function renderInlineMarkdown(text) {
+  let html = String(text ?? '');
   html = html.replace(/`([^`]+)`/g, (_m, p1) => `<code>${p1}</code>`);
   html = html.replace(/\*\*([^*]+)\*\*/g, (_m, p1) => `<strong>${p1}</strong>`);
   html = html.replace(/(^|\W)\*([^*]+)\*/g, (_m, p0, p1) => `${p0}<em>${p1}</em>`);
   html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_m, text, url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`);
-  html = html.replace(/\n/g, '<br/>');
   return html;
 }
-function loadNotes() {
-  const saved = Store.get('notesMarkdown') ?? '';
-  if (notesInput)   notesInput.value = saved;
-  if (notesPreview) notesPreview.innerHTML = renderMarkdown(saved);
+function renderMarkdown(markdown) {
+  const raw = String(markdown ?? '');
+  if (!raw.trim()) return '<p class="notes-empty-preview">Nothing written yet.</p>';
+  const lines = escapeHtml(raw).split('\n');
+  return lines.map((line) => {
+    const checklist = line.match(/^\s*[-*]\s+\[( |x|X)\]\s+(.*)$/);
+    if (checklist) {
+      const checked = checklist[1].toLowerCase() === 'x';
+      return `<label class="notes-check${checked ? ' checked' : ''}"><input type="checkbox" disabled ${checked ? 'checked' : ''}/><span>${renderInlineMarkdown(checklist[2])}</span></label>`;
+    }
+    const bullet = line.match(/^\s*[-*]\s+(.*)$/);
+    if (bullet) return `<div class="notes-bullet"><span>${renderInlineMarkdown(bullet[1])}</span></div>`;
+    if (!line.trim()) return '<p>&nbsp;</p>';
+    return `<p>${renderInlineMarkdown(line)}</p>`;
+  }).join('');
 }
+function makeNote(body = '', pinned = false) {
+  return {
+    id: `note_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    title: inferNoteTitle(body),
+    body,
+    pinned,
+    updatedAt: Date.now(),
+  };
+}
+function inferNoteTitle(body) {
+  const firstLine = String(body ?? '').split('\n').find(line => line.trim())?.trim() ?? '';
+  const cleaned = firstLine
+    .replace(/^#+\s*/, '')
+    .replace(/^[-*]\s+\[( |x|X)\]\s+/, '')
+    .replace(/^[-*]\s+/, '')
+    .replace(/[`*_#\[\]()]/g, '')
+    .trim();
+  return (cleaned || 'Untitled Note').slice(0, 36);
+}
+function sortNotes(notes) {
+  return [...notes].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+}
+function getNotes() {
+  let notes = Store.get('notesList');
+  if (!Array.isArray(notes) || !notes.length) {
+    const legacy = Store.get('notesMarkdown') ?? '';
+    notes = [makeNote(legacy)];
+    Store.set('notesList', notes);
+    Store.set('activeNoteId', notes[0].id);
+  }
+  return notes.map(note => ({
+    id: note.id || `note_${Math.random().toString(36).slice(2, 10)}`,
+    title: note.title || inferNoteTitle(note.body),
+    body: note.body ?? '',
+    pinned: !!note.pinned,
+    updatedAt: note.updatedAt ?? Date.now(),
+  }));
+}
+function setNotes(notes) {
+  Store.set('notesList', notes);
+  Store.set('notesMarkdown', getActiveNote(notes)?.body ?? '');
+}
+function getActiveNote(notes = getNotes()) {
+  const activeId = Store.get('activeNoteId');
+  return notes.find(note => note.id === activeId) ?? sortNotes(notes)[0] ?? null;
+}
+function setNotesSaveStatus(text, saving = false) {
+  if (!notesSaveStatus) return;
+  notesSaveStatus.textContent = text;
+  notesSaveStatus.classList.toggle('saving', saving);
+}
+function flashNotesSaved() {
+  setNotesSaveStatus('Saving...', true);
+  if (notesSaveTimer) clearTimeout(notesSaveTimer);
+  notesSaveTimer = setTimeout(() => setNotesSaveStatus('Saved'), 350);
+}
+function renderNotesSelect(notes, activeId) {
+  if (!notesSelect) return;
+  notesSelect.innerHTML = '';
+  sortNotes(notes).forEach((note) => {
+    const opt = document.createElement('option');
+    opt.value = note.id;
+    opt.textContent = `${note.pinned ? '★ ' : ''}${note.title || inferNoteTitle(note.body)}`;
+    notesSelect.appendChild(opt);
+  });
+  notesSelect.value = activeId;
+}
+function renderActiveNote() {
+  const notes = getNotes();
+  const active = getActiveNote(notes);
+  if (!active) return;
+  Store.set('activeNoteId', active.id);
+  if (notesInput) notesInput.value = active.body ?? '';
+  if (notesPreview) notesPreview.innerHTML = renderMarkdown(active.body ?? '');
+  if (notesPinBtn) {
+    notesPinBtn.textContent = active.pinned ? '★' : '☆';
+    notesPinBtn.classList.toggle('active', !!active.pinned);
+    notesPinBtn.title = active.pinned ? 'Unpin note' : 'Pin note';
+  }
+  renderNotesSelect(notes, active.id);
+  applyNotesPreviewVisibility();
+  setNotesSaveStatus('Saved');
+}
+function updateActiveNoteBody(body) {
+  const notes = getNotes();
+  const activeId = Store.get('activeNoteId') || getActiveNote(notes)?.id;
+  const next = notes.map(note => {
+    if (note.id !== activeId) return note;
+    return { ...note, body, title: inferNoteTitle(body), updatedAt: Date.now() };
+  });
+  setNotes(next);
+  if (notesPreview) notesPreview.innerHTML = renderMarkdown(body);
+  renderNotesSelect(next, activeId);
+  if (notesSelect) notesSelect.value = activeId;
+  flashNotesSaved();
+}
+function applyNotesPreviewVisibility() {
+  const hidden = !!Store.get('notesPreviewHidden');
+  if (notesPreview) notesPreview.classList.toggle('hidden', hidden);
+  if (notesPreviewToggleBtn) notesPreviewToggleBtn.textContent = hidden ? 'Show Preview' : 'Hide Preview';
+}
+function loadNotes() { renderActiveNote(); }
+
 if (notesInput) {
-  notesInput.addEventListener('input', () => {
-    if (notesPreview) notesPreview.innerHTML = renderMarkdown(notesInput.value);
-    Store.set('notesMarkdown', notesInput.value);
+  notesInput.addEventListener('input', () => updateActiveNoteBody(notesInput.value));
+}
+if (notesSelect) {
+  notesSelect.addEventListener('change', () => {
+    Store.set('activeNoteId', notesSelect.value);
+    renderActiveNote();
+  });
+}
+if (notesAddBtn) {
+  notesAddBtn.addEventListener('click', () => {
+    const notes = getNotes();
+    const note = makeNote('');
+    const next = [...notes, note];
+    setNotes(next);
+    Store.set('activeNoteId', note.id);
+    renderActiveNote();
+    flashNotesSaved();
+    notesInput?.focus();
+  });
+}
+if (notesPinBtn) {
+  notesPinBtn.addEventListener('click', () => {
+    const notes = getNotes();
+    const activeId = Store.get('activeNoteId') || getActiveNote(notes)?.id;
+    const next = notes.map(note => note.id === activeId ? { ...note, pinned: !note.pinned, updatedAt: Date.now() } : note);
+    setNotes(next);
+    renderActiveNote();
+    flashNotesSaved();
+  });
+}
+if (notesDeleteBtn) {
+  notesDeleteBtn.addEventListener('click', () => {
+    const notes = getNotes();
+    const activeId = Store.get('activeNoteId') || getActiveNote(notes)?.id;
+    let next = notes.filter(note => note.id !== activeId);
+    if (!next.length) next = [makeNote('')];
+    setNotes(next);
+    Store.set('activeNoteId', sortNotes(next)[0].id);
+    renderActiveNote();
+    flashNotesSaved();
   });
 }
 if (notesClearBtn) {
   notesClearBtn.addEventListener('click', () => {
-    if (notesInput)   notesInput.value = '';
-    if (notesPreview) notesPreview.innerHTML = '';
-    Store.set('notesMarkdown', '');
+    if (notesInput) notesInput.value = '';
+    updateActiveNoteBody('');
+  });
+}
+if (notesPreviewToggleBtn) {
+  notesPreviewToggleBtn.addEventListener('click', () => {
+    Store.set('notesPreviewHidden', !Store.get('notesPreviewHidden'));
+    applyNotesPreviewVisibility();
   });
 }
 loadNotes();
@@ -551,12 +795,13 @@ loadMediaStatus();
 setInterval(loadMediaStatus, 5000);
 
 // ─── Widget System ──────────────────────────────────────────────────
-const WIDGETS = ['clock','bookmarks','recent','media','notes'];
+const WIDGETS = ['clock','search','bookmarks','recent','media','notes'];
 let layoutMode = false;
 
 const DEFAULT_POSITIONS = {
-  clock:     { x: 50, y: 50, anchor: 'center' },
-  bookmarks: { x: 50, y: null, bottom: 36, anchor: 'bottom-center' },
+  clock:     { x: 50, y: 42, anchor: 'free-center' },
+  search:    { x: 50, y: 62, anchor: 'free-center' },
+  bookmarks: { x: 50, y: 92, anchor: 'free-center' },
   recent:    { x: 16, y: 28, anchor: 'free-center' },
   media:     { x: 84, y: 28, anchor: 'free-center' },
   notes:     { x: 50, y: 78, anchor: 'free-center' },
@@ -565,57 +810,196 @@ const DEFAULT_POSITIONS = {
 function posKey(id)  { return `widgetPos_${id}`; }
 function sizeKey(id) { return `widgetSize_${id}`; }
 
-function applyWidgetPosition(id, pos) {
-  const el = document.getElementById(`widget-${id}`);
-  if (!el) return;
-  el.style.left = ''; el.style.right = ''; el.style.top = ''; el.style.bottom = ''; el.style.transform = '';
-  switch (pos.anchor) {
-    case 'center':
-      el.style.left = pos.x + '%'; el.style.top = pos.y + '%'; el.style.transform = 'translate(-50%, -50%)'; break;
-    case 'bottom-center':
-      el.style.left = pos.x + '%'; el.style.bottom = (pos.bottom ?? 36) + 'px'; el.style.transform = 'translateX(-50%)'; break;
-    case 'snap-center':
-      el.style.left = '50%'; el.style.top = '50%'; el.style.transform = 'translate(-50%, -50%)'; break;
-    case 'snap-top-left':     el.style.left = '40px';  el.style.top = '40px'; break;
-    case 'snap-top-center':   el.style.left = '50%';   el.style.top = '40px'; el.style.transform = 'translateX(-50%)'; break;
-    case 'snap-top-right':    el.style.right = '40px'; el.style.top = '40px'; break;
-    case 'snap-mid-left':     el.style.left = '40px';  el.style.top = '50%'; el.style.transform = 'translateY(-50%)'; break;
-    case 'snap-mid-right':    el.style.right = '40px'; el.style.top = '50%'; el.style.transform = 'translateY(-50%)'; break;
-    case 'snap-bottom-left':  el.style.left = '40px';  el.style.bottom = '40px'; break;
-    case 'snap-bottom-center':el.style.left = '50%';   el.style.bottom = '40px'; el.style.transform = 'translateX(-50%)'; break;
-    case 'snap-bottom-right': el.style.right = '40px'; el.style.bottom = '40px'; break;
-    case 'free-center':
-      el.style.left = pos.x + '%'; el.style.top = pos.y + '%'; el.style.transform = 'translate(-50%, -50%)'; break;
-    default:
-      el.style.left = pos.x + 'px'; el.style.top = pos.y + 'px';
-  }
+const PIXEL_POSITION_WIDGETS = new Set(['search', 'bookmarks']);
+function usesPixelPosition(id) { return PIXEL_POSITION_WIDGETS.has(id); }
+
+function clampPercent(value, fallback = 50) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(100, Math.max(0, n));
 }
 
-function snapZoneToAnchor(zoneName) {
+function clampPixel(value, min, max, fallback = min) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+function centerPositionFromPixels(x, y, width, height) {
   return {
-    'center':     'snap-center',
-    'top-left':   'snap-top-left',
-    'top-center': 'snap-top-center',
-    'top-right':  'snap-top-right',
-    'mid-left':   'snap-mid-left',
-    'mid-right':  'snap-mid-right',
-    'bot-left':   'snap-bottom-left',
-    'bot-center': 'snap-bottom-center',
-    'bot-right':  'snap-bottom-right',
-  }[zoneName];
+    x: clampPercent(((x + width / 2) / window.innerWidth) * 100),
+    y: clampPercent(((y + height / 2) / window.innerHeight) * 100),
+    anchor: 'free-center'
+  };
+}
+
+function currentViewportBase() {
+  return { vw: window.innerWidth, vh: window.innerHeight };
+}
+
+function viewportBaseFromPosition(pos) {
+  const vw = Number(pos?.vw);
+  const vh = Number(pos?.vh);
+  return {
+    vw: Number.isFinite(vw) && vw > 0 ? vw : window.innerWidth,
+    vh: Number.isFinite(vh) && vh > 0 ? vh : window.innerHeight,
+  };
+}
+
+function pixelPositionFromPixels(x, y, width = 0, height = 0, base = currentViewportBase()) {
+  const maxX = Math.max(CLAMP_PAD, window.innerWidth  - width  - CLAMP_PAD);
+  const maxY = Math.max(CLAMP_PAD, window.innerHeight - height - CLAMP_PAD);
+  return {
+    x: clampPixel(x, CLAMP_PAD, maxX, CLAMP_PAD),
+    y: clampPixel(y, CLAMP_PAD, maxY, CLAMP_PAD),
+    anchor: 'free',
+    vw: base.vw,
+    vh: base.vh,
+    w: Math.max(0, Number(width) || 0),
+    h: Math.max(0, Number(height) || 0),
+  };
+}
+
+function responsivePixelPosition(pos, width = 0, height = 0) {
+  const base = viewportBaseFromPosition(pos);
+  const savedW = Number.isFinite(Number(pos?.w)) && Number(pos.w) > 0 ? Number(pos.w) : width;
+  const savedH = Number.isFinite(Number(pos?.h)) && Number(pos.h) > 0 ? Number(pos.h) : height;
+  const savedCenterX = (Number(pos?.x) || 0) + savedW / 2;
+  const savedCenterY = (Number(pos?.y) || 0) + savedH / 2;
+  const scaledCenterX = savedCenterX * (window.innerWidth / base.vw);
+  const scaledCenterY = savedCenterY * (window.innerHeight / base.vh);
+  return pixelPositionFromPixels(scaledCenterX - width / 2, scaledCenterY - height / 2, width, height, base);
+}
+
+function ensureStoredPosition(id, pos) {
+  if (!pos) return pos;
+  if (!usesPixelPosition(id) || pos.anchor !== 'free') return pos;
+  const base = viewportBaseFromPosition(pos);
+  const w = Number(pos?.w);
+  const h = Number(pos?.h);
+  return {
+    ...pos,
+    anchor: 'free',
+    vw: base.vw,
+    vh: base.vh,
+    ...(Number.isFinite(w) && w > 0 ? { w } : {}),
+    ...(Number.isFinite(h) && h > 0 ? { h } : {}),
+  };
 }
 
 function centerPositionFromRect(rect) {
-  return { x: ((rect.left + rect.width / 2) / window.innerWidth) * 100, y: ((rect.top + rect.height / 2) / window.innerHeight) * 100, anchor: 'free-center' };
+  return centerPositionFromPixels(rect.left, rect.top, rect.width, rect.height);
 }
-function centerPositionFromPixels(x, y, width, height) {
-  return { x: ((x + width / 2) / window.innerWidth) * 100, y: ((y + height / 2) / window.innerHeight) * 100, anchor: 'free-center' };
+
+function pixelPositionFromRect(rect) {
+  return pixelPositionFromPixels(rect.left, rect.top, rect.width, rect.height);
+}
+
+function legacyAnchorRect(anchor, el, pos = {}) {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const w = el?.offsetWidth  || el?.getBoundingClientRect?.().width  || 0;
+  const h = el?.offsetHeight || el?.getBoundingClientRect?.().height || 0;
+  const bottom = pos.bottom ?? 36;
+
+  switch (anchor) {
+    case 'bottom-center': return { left: ((pos.x ?? 50) / 100) * vw - w / 2, top: vh - bottom - h, width: w, height: h };
+    case 'snap-center': return { left: vw / 2 - w / 2, top: vh / 2 - h / 2, width: w, height: h };
+    case 'snap-top-left': return { left: 40, top: 40, width: w, height: h };
+    case 'snap-top-center': return { left: vw / 2 - w / 2, top: 40, width: w, height: h };
+    case 'snap-top-right': return { left: vw - w - 40, top: 40, width: w, height: h };
+    case 'snap-mid-left': return { left: 40, top: vh / 2 - h / 2, width: w, height: h };
+    case 'snap-mid-right': return { left: vw - w - 40, top: vh / 2 - h / 2, width: w, height: h };
+    case 'snap-bottom-left': return { left: 40, top: vh - h - 40, width: w, height: h };
+    case 'snap-bottom-center': return { left: vw / 2 - w / 2, top: vh - h - 40, width: w, height: h };
+    case 'snap-bottom-right': return { left: vw - w - 40, top: vh - h - 40, width: w, height: h };
+    default: return null;
+  }
+}
+
+function normalizeWidgetPosition(id, pos) {
+  const fallback = DEFAULT_POSITIONS[id] ?? { x: 50, y: 50, anchor: 'free-center' };
+  const p = pos ?? fallback;
+  const el = document.getElementById(`widget-${id}`);
+  const rect = el?.getBoundingClientRect?.();
+  const w = rect?.width  || el?.offsetWidth  || 0;
+  const h = rect?.height || el?.offsetHeight || 0;
+
+  if (usesPixelPosition(id)) {
+    if (p.anchor === 'free') {
+      return responsivePixelPosition(p, w, h);
+    }
+
+    const legacyRect = legacyAnchorRect(p.anchor, el, p);
+    if (legacyRect) return pixelPositionFromRect(legacyRect);
+
+    const centerX = clampPercent(p.x, fallback.x ?? 50);
+    const centerY = clampPercent(p.y, fallback.y ?? 50);
+    return pixelPositionFromPixels(
+      (centerX / 100) * window.innerWidth - w / 2,
+      (centerY / 100) * window.innerHeight - h / 2,
+      w,
+      h
+    );
+  }
+
+  if (p.anchor === 'free-center' || p.anchor === 'center') {
+    return {
+      x: clampPercent(p.x, fallback.x ?? 50),
+      y: clampPercent(p.y, fallback.y ?? 50),
+      anchor: 'free-center'
+    };
+  }
+
+  const legacyRect = legacyAnchorRect(p.anchor, el, p);
+  if (legacyRect) return centerPositionFromRect(legacyRect);
+
+  if (p.anchor === 'free' || Number.isFinite(p.x) && Number.isFinite(p.y) && p.x > 100 && p.y > 100) {
+    return centerPositionFromPixels(p.x ?? 0, p.y ?? 0, w, h);
+  }
+
+  return {
+    x: clampPercent(p.x, fallback.x ?? 50),
+    y: clampPercent(p.y, fallback.y ?? 50),
+    anchor: 'free-center'
+  };
+}
+
+function positionsMatch(a, b) {
+  return a && b && a.anchor === b.anchor && Math.round(a.x * 1000) === Math.round(b.x * 1000) && Math.round(a.y * 1000) === Math.round(b.y * 1000);
+}
+
+function applyWidgetPosition(id, pos) {
+  const el = document.getElementById(`widget-${id}`);
+  if (!el) return null;
+  const normalizedPos = normalizeWidgetPosition(id, pos);
+  el.style.right = '';
+  el.style.bottom = '';
+
+  if (usesPixelPosition(id)) {
+    el.style.left = `${normalizedPos.x}px`;
+    el.style.top = `${normalizedPos.y}px`;
+    el.style.transform = 'none';
+  } else {
+    el.style.left = `${normalizedPos.x}%`;
+    el.style.top = `${normalizedPos.y}%`;
+    el.style.transform = 'translate(-50%, -50%)';
+  }
+
+  return normalizedPos;
+}
+
+function currentWidgetPosition(id) {
+  const el = document.getElementById(`widget-${id}`);
+  if (!el) return normalizeWidgetPosition(id, Store.get(posKey(id)) ?? DEFAULT_POSITIONS[id]);
+  const rect = el.getBoundingClientRect();
+  return usesPixelPosition(id) ? pixelPositionFromRect(rect) : centerPositionFromRect(rect);
 }
 
 const CLAMP_PAD = 8;
-function clampWidget(id) {
+function clampWidget(id, persist = false) {
   const el = document.getElementById(`widget-${id}`);
-  if (!el || el.hidden) return;
+  if (!el || el.hidden || getComputedStyle(el).display === 'none') return;
   const rect = el.getBoundingClientRect();
   const vw = window.innerWidth, vh = window.innerHeight;
   let dx = 0, dy = 0;
@@ -624,14 +1008,17 @@ function clampWidget(id) {
   if (rect.top < CLAMP_PAD)              dy = CLAMP_PAD - rect.top;
   else if (rect.bottom > vh - CLAMP_PAD) dy = (vh - CLAMP_PAD) - rect.bottom;
   if (dx !== 0 || dy !== 0) {
-    const pos = centerPositionFromPixels(rect.left + dx, rect.top + dy, rect.width, rect.height);
+    const pos = usesPixelPosition(id)
+      ? pixelPositionFromPixels(rect.left + dx, rect.top + dy, rect.width, rect.height)
+      : centerPositionFromPixels(rect.left + dx, rect.top + dy, rect.width, rect.height);
     applyWidgetPosition(id, pos);
+    if (persist) Store.set(posKey(id), pos);
   }
 }
-function clampAllWidgets() { WIDGETS.forEach(id => clampWidget(id)); }
+function clampAllWidgets(persist = false) { WIDGETS.forEach(id => clampWidget(id, persist)); }
 
 // ─── Widget Sizes ───────────────────────────────────────────────────
-const WIDGET_MIN = { clock:[160,60], bookmarks:[120,36], recent:[180,80], media:[160,60], notes:[180,100] };
+const WIDGET_MIN = { clock:[160,60], search:[260,48], bookmarks:[120,36], recent:[180,80], media:[160,60], notes:[180,100] };
 function applyWidgetSize(id, size) {
   const el = document.getElementById(`widget-${id}`); if (!el) return;
   if (size) {
@@ -684,23 +1071,31 @@ document.addEventListener('mouseup',  endResize);
 document.addEventListener('touchend', endResize);
 
 function loadWidgetPositions() {
-  WIDGETS.forEach(id => { const pos = Store.get(posKey(id)) ?? DEFAULT_POSITIONS[id]; applyWidgetPosition(id, pos); });
   loadWidgetSizes();
-  requestAnimationFrame(() => requestAnimationFrame(clampAllWidgets));
+  WIDGETS.forEach(id => {
+    const saved = ensureStoredPosition(id, Store.get(posKey(id)));
+    if (saved) Store.set(posKey(id), saved);
+    applyWidgetPosition(id, saved ?? DEFAULT_POSITIONS[id]);
+  });
+  requestAnimationFrame(() => requestAnimationFrame(() => clampAllWidgets(false)));
 }
 loadWidgetPositions();
 updateClockScale();
 window.addEventListener('resize', () => {
-  WIDGETS.forEach(id => { const pos = Store.get(posKey(id)) ?? DEFAULT_POSITIONS[id]; applyWidgetPosition(id, pos); });
-  requestAnimationFrame(() => requestAnimationFrame(clampAllWidgets));
+  WIDGETS.forEach(id => {
+    const saved = ensureStoredPosition(id, Store.get(posKey(id)));
+    applyWidgetPosition(id, saved ?? DEFAULT_POSITIONS[id]);
+  });
+  requestAnimationFrame(() => requestAnimationFrame(() => clampAllWidgets(false)));
 });
 
 function resetWidgetPositions() {
   WIDGETS.forEach(id => {
     Store.set(posKey(id), null); Store.set(sizeKey(id), null);
-    applyWidgetPosition(id, DEFAULT_POSITIONS[id]); applyWidgetSize(id, null);
+    applyWidgetSize(id, null);
+    applyWidgetPosition(id, DEFAULT_POSITIONS[id]);
   });
-  requestAnimationFrame(() => requestAnimationFrame(clampAllWidgets));
+  requestAnimationFrame(() => requestAnimationFrame(() => clampAllWidgets(false)));
   updateLayoutRows();
 }
 document.getElementById('reset-layout-btn').addEventListener('click', resetWidgetPositions);
@@ -819,8 +1214,12 @@ function endDrag(e) {
   el.style.bottom = 'auto'; const elH = el.offsetHeight; el.style.bottom = '';
   const snap = getSnapPosition(curX + elW / 2, curY + elH / 2, elW, elH);
   let pos;
-  if (snap) {
-    pos = { anchor: snapZoneToAnchor(snap.zone.name) };
+  if (usesPixelPosition(draggedId)) {
+    pos = snap
+      ? pixelPositionFromPixels(snap.snapX, snap.snapY, elW, elH)
+      : pixelPositionFromPixels(curX, curY, elW, elH);
+  } else if (snap) {
+    pos = centerPositionFromPixels(snap.snapX, snap.snapY, elW, elH);
   } else {
     pos = centerPositionFromPixels(curX, curY, elW, elH);
   }
@@ -841,29 +1240,38 @@ function setLayoutMode(on) {
   document.body.classList.toggle('layout-mode', on);
   layoutBanner.classList.toggle('visible', on);
   document.getElementById('layout-btn').classList.toggle('active', on);
+  if (on && document.activeElement?.closest?.('.widget')) document.activeElement.blur();
 }
 document.getElementById('layout-done-btn').addEventListener('click', () => { setLayoutMode(false); closePanel('layout-panel'); });
+
+function blockWidgetInteractionInLayoutMode(e) {
+  if (!layoutMode) return;
+  const target = e.target;
+  const widget = target?.closest?.('.widget');
+  if (!widget) return;
+  if (target.closest?.('.widget-resize-handle') || target.closest?.('.widget-drag-handle')) return;
+  e.preventDefault();
+  e.stopPropagation();
+}
+document.addEventListener('click', blockWidgetInteractionInLayoutMode, true);
+document.addEventListener('submit', blockWidgetInteractionInLayoutMode, true);
 
 function updateLayoutRows() {
   const container = document.getElementById('layout-widget-rows'); if (!container) return;
   container.innerHTML = '';
   WIDGETS.forEach(id => {
     const saved = Store.get(posKey(id));
-    const pos   = saved ?? DEFAULT_POSITIONS[id];
+    const pos   = normalizeWidgetPosition(id, saved ?? DEFAULT_POSITIONS[id]);
     const row   = document.createElement('div'); row.className = 'layout-row';
     const nm    = document.createElement('span'); nm.className = 'layout-row-name';
     nm.textContent = id.charAt(0).toUpperCase() + id.slice(1);
     const ps    = document.createElement('span'); ps.className = 'layout-row-pos';
     if (Store.get(widgetHiddenKey(id))) {
       ps.textContent = 'Hidden';
-    } else if (pos.anchor === 'free-center') {
-      ps.textContent = `${Math.round(pos.x)}% / ${Math.round(pos.y)}%`;
-    } else if (pos.anchor === 'free') {
-      ps.textContent = `${Math.round(pos.x)}px, ${Math.round(pos.y)}px`;
-    } else if (pos.anchor === 'center') {
-      ps.textContent = `${Math.round(pos.x)}% / ${Math.round(pos.y)}% (center)`;
+    } else if (usesPixelPosition(id)) {
+      ps.textContent = `${Math.round(pos.x)}px / ${Math.round(pos.y)}px`;
     } else {
-      ps.textContent = `${Math.round(pos.x)}% / bottom ${pos.bottom ?? 36}px`;
+      ps.textContent = `${Math.round(pos.x)}% / ${Math.round(pos.y)}%`;
     }
     row.appendChild(nm); row.appendChild(ps); container.appendChild(row);
   });
@@ -882,7 +1290,7 @@ function setProfiles(profiles){ Store.set('layoutProfiles', profiles); }
 function captureLayoutProfile() {
   const positions = {}, hidden = {}, sizes = {};
   WIDGETS.forEach(id => {
-    positions[id] = Store.get(posKey(id)) ?? DEFAULT_POSITIONS[id];
+    positions[id] = currentWidgetPosition(id);
     hidden[id]    = !!Store.get(widgetHiddenKey(id));
     sizes[id]     = Store.get(sizeKey(id));
   });
@@ -890,20 +1298,26 @@ function captureLayoutProfile() {
     positions, hidden, sizes,
     backgroundDetails: { bgImage: Store.get('bgImage'), bgPreset: Store.get('bgPreset') ?? 0, bgOverlay: Store.get('bgOverlay') ?? 35, bgBlur: Store.get('bgBlur') ?? 0 },
     clockDetails:      { hideGreeting: !!Store.get('hideGreeting'), hideDate: !!Store.get('hideDate') },
-    notesMarkdown:     Store.get('notesMarkdown') ?? ''
+    notesMarkdown:     Store.get('notesMarkdown') ?? '',
+    notesList:         Store.get('notesList') ?? [],
+    activeNoteId:      Store.get('activeNoteId'),
+    notesPreviewHidden: !!Store.get('notesPreviewHidden')
   };
 }
 
 function applyLayoutProfile(profile) {
   if (!profile) return;
   WIDGETS.forEach(id => {
-    const pos = profile.positions?.[id] ?? DEFAULT_POSITIONS[id];
-    Store.set(posKey(id), pos); applyWidgetPosition(id, pos);
     const size = profile.sizes?.[id]; Store.set(sizeKey(id), size); applyWidgetSize(id, size || null);
-    if (profile.notesMarkdown !== undefined) {
+    const pos = ensureStoredPosition(id, profile.positions?.[id] ?? DEFAULT_POSITIONS[id]);
+    applyWidgetPosition(id, pos);
+    Store.set(posKey(id), pos);
+    if (profile.notesList !== undefined) Store.set('notesList', profile.notesList);
+    if (profile.activeNoteId !== undefined) Store.set('activeNoteId', profile.activeNoteId);
+    if (profile.notesPreviewHidden !== undefined) Store.set('notesPreviewHidden', !!profile.notesPreviewHidden);
+    if (profile.notesMarkdown !== undefined && profile.notesList === undefined) {
       Store.set('notesMarkdown', profile.notesMarkdown);
-      if (notesInput)   notesInput.value = profile.notesMarkdown;
-      if (notesPreview) notesPreview.innerHTML = renderMarkdown(profile.notesMarkdown);
+      Store.set('notesList', [makeNote(profile.notesMarkdown)]);
     }
     Store.set(widgetHiddenKey(id), !!profile.hidden?.[id]); applyWidgetVisibility(id);
   });
@@ -920,12 +1334,14 @@ function applyLayoutProfile(profile) {
   toggleGreeting.checked       = !Store.get('hideGreeting');
   toggleDate.checked           = !Store.get('hideDate');
   toggleWidgetClock.checked    = !Store.get(widgetHiddenKey('clock'));
+  toggleWidgetSearch.checked   = !Store.get(widgetHiddenKey('search'));
   toggleWidgetBookmarks.checked= !Store.get(widgetHiddenKey('bookmarks'));
   toggleWidgetRecent.checked   = !Store.get(widgetHiddenKey('recent'));
   toggleWidgetMedia.checked    = !Store.get(widgetHiddenKey('media'));
   toggleWidgetNotes.checked    = !Store.get(widgetHiddenKey('notes'));
+  loadNotes();
   applyVisibility(); updateLayoutRows();
-  requestAnimationFrame(() => requestAnimationFrame(clampAllWidgets));
+  requestAnimationFrame(() => requestAnimationFrame(() => clampAllWidgets(false)));
 }
 
 function renderProfileOptions(selectedName = Store.get('activeLayoutProfile')) {
@@ -964,6 +1380,71 @@ deleteProfileBtn.addEventListener('click', () => {
   renderProfileOptions(); showToast(`Deleted layout: ${name}`);
 });
 renderProfileOptions();
+
+// ─── Import / Export Settings ──────────────────────────────────────
+const exportSettingsBtn = document.getElementById('export-settings-btn');
+const importSettingsBtn = document.getElementById('import-settings-btn');
+const importSettingsFile = document.getElementById('import-settings-file');
+
+function collectSettingsBackup() {
+  const storage = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key) continue;
+    try { storage[key] = JSON.parse(localStorage.getItem(key)); }
+    catch { storage[key] = localStorage.getItem(key); }
+  }
+  return {
+    app: 'Cenit New Tab',
+    version: '1.3.0',
+    exportedAt: new Date().toISOString(),
+    storage,
+  };
+}
+function downloadSettingsBackup() {
+  const backup = collectSettingsBackup();
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `cenit-settings-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast('Settings exported');
+}
+function restoreSettingsBackup(text) {
+  let parsed;
+  try { parsed = JSON.parse(text); }
+  catch { showToast('Invalid backup file'); return; }
+  const storage = parsed?.storage && typeof parsed.storage === 'object' ? parsed.storage : parsed;
+  if (!storage || typeof storage !== 'object' || Array.isArray(storage)) {
+    showToast('Invalid backup file'); return;
+  }
+  const ok = window.confirm('Importing will replace your current Cenit settings. Continue?');
+  if (!ok) return;
+  localStorage.clear();
+  Object.entries(storage).forEach(([key, value]) => {
+    localStorage.setItem(key, JSON.stringify(value));
+  });
+  showToast('Settings imported');
+  setTimeout(() => window.location.reload(), 350);
+}
+if (exportSettingsBtn) exportSettingsBtn.addEventListener('click', downloadSettingsBackup);
+if (importSettingsBtn && importSettingsFile) {
+  importSettingsBtn.addEventListener('click', () => importSettingsFile.click());
+  importSettingsFile.addEventListener('change', () => {
+    const file = importSettingsFile.files?.[0];
+    importSettingsFile.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => restoreSettingsBackup(String(reader.result ?? ''));
+    reader.onerror = () => showToast('Import failed');
+    reader.readAsText(file);
+  });
+}
 
 // ─── Toast ──────────────────────────────────────────────────────────
 const toastEl = document.createElement('div');
