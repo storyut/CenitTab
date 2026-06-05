@@ -45,6 +45,7 @@
   <div class="widget" id="widget-bookmarks" data-widget="bookmarks">
     <div class="widget-drag-handle" title="Drag to reposition"></div>
     <section class="bookmarks-bar" id="bookmarks-bar">
+      <div id="bookmark-folder-tabs" class="bookmark-folder-tabs"></div>
       <div id="bookmark-list" class="bookmark-list"></div>
       <button class="add-bm-btn" id="add-bm-btn" title="Add bookmark">＋</button>
     </section>
@@ -248,7 +249,16 @@
       <p class="label">Add Bookmark</p>
       <input class="input" type="text" id="bm-name" placeholder="Name"/>
       <input class="input" type="url" id="bm-url" placeholder="https://..."/>
+      <select class="input select-input" id="bm-folder-select" aria-label="Bookmark folder"></select>
       <button class="action-btn" id="save-bm-btn">Save Bookmark</button>
+      <div class="divider"></div>
+      <p class="label">Folders</p>
+      <div class="bm-folder-create-row">
+        <input class="input" type="text" id="bm-folder-name" placeholder="New folder name"/>
+        <button class="action-btn bm-folder-add-btn" id="save-bm-folder-btn" type="button">Add</button>
+      </div>
+      <div id="bm-folder-manage-list" class="bm-folder-manage-list"></div>
+      <p class="settings-help">Use folders to filter the bookmark widget and keep the panel organized.</p>
       <p class="label" style="margin-top:20px">Saved Bookmarks</p>
       <div id="bm-manage-list" class="bm-manage-list"></div>
     </div>
