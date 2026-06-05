@@ -1761,7 +1761,7 @@ function collectSettingsBackup() {
   }
   return {
     app: 'Cenit New Tab',
-    version: '1.3.0',
+    version: '1.2.0',
     exportedAt: new Date().toISOString(),
     storage,
   };
