@@ -119,6 +119,13 @@
       <button class="close-btn" data-target="settings-panel">✕</button>
     </div>
     <div class="panel-body">
+      <p class="label">Theme Presets</p>
+      <div id="theme-preset-grid" class="theme-preset-grid"></div>
+      <input class="input" type="text" id="theme-name" placeholder="Custom theme name"/>
+      <button class="action-btn" id="save-theme-btn" type="button">Save Current Theme</button>
+      <button class="action-btn danger-action" id="delete-theme-btn" type="button">Delete Selected Custom Theme</button>
+      <p class="settings-help">Themes apply background, overlay, blur, accent color, clock font, and UI font.</p>
+      <div class="divider"></div>
       <p class="label">Clock Font</p>
       <select class="input select-input" id="clock-font-select"></select>
       <p class="label" style="margin-top:4px">Custom Font URL (Google Fonts)</p>

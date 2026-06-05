@@ -4,6 +4,37 @@ const Store = {
   set: (key, val) => localStorage.setItem(key, JSON.stringify(val)),
 };
 
+// ─── Theme Accent ───────────────────────────────────────────────────
+const DEFAULT_ACCENT = '#c9a96e';
+
+function normalizeHexColor(value, fallback = DEFAULT_ACCENT) {
+  const raw = String(value ?? '').trim();
+  const full = raw.match(/^#?([0-9a-f]{6})$/i);
+  if (full) return `#${full[1].toLowerCase()}`;
+  const short = raw.match(/^#?([0-9a-f]{3})$/i);
+  if (short) return `#${short[1].split('').map(ch => ch + ch).join('').toLowerCase()}`;
+  return fallback;
+}
+
+function hexToRgb(hex) {
+  const clean = normalizeHexColor(hex).slice(1);
+  return {
+    r: parseInt(clean.slice(0, 2), 16),
+    g: parseInt(clean.slice(2, 4), 16),
+    b: parseInt(clean.slice(4, 6), 16),
+  };
+}
+
+function applyAccentColor(color, persist = false) {
+  const accent = normalizeHexColor(color);
+  const { r, g, b } = hexToRgb(accent);
+  document.documentElement.style.setProperty('--accent', accent);
+  document.documentElement.style.setProperty('--accent-dim', `rgba(${r},${g},${b},0.25)`);
+  if (persist) Store.set('accentColor', accent);
+}
+
+applyAccentColor(Store.get('accentColor') ?? DEFAULT_ACCENT);
+
 // ─── Clock ──────────────────────────────────────────────────────────
 const clockEl  = document.getElementById('clock');
 const dateEl   = document.getElementById('date');
@@ -85,7 +116,8 @@ function saveBackgroundImage(file) {
     Store.set('bgImage', e.target.result);
     applyBackground(e.target.result, true);
     document.getElementById('upload-text').textContent = file.name;
-    document.querySelectorAll('.preset-swatch').forEach(s => s.classList.remove('active'));
+    updateBackgroundPresetActive();
+    clearActiveTheme();
   };
   reader.readAsDataURL(file);
 }
@@ -106,10 +138,18 @@ function buildPresetGrid() {
     sw.addEventListener('click', () => {
       Store.set('bgPreset', i); Store.set('bgImage', null);
       applyBackground(g, false);
-      document.querySelectorAll('.preset-swatch').forEach(s => s.classList.remove('active'));
-      sw.classList.add('active');
+      updateBackgroundPresetActive();
+      clearActiveTheme();
     });
     grid.appendChild(sw);
+  });
+}
+
+function updateBackgroundPresetActive() {
+  const saved = Store.get('bgPreset') ?? 0;
+  const hasImage = !!Store.get('bgImage');
+  document.querySelectorAll('.preset-swatch').forEach((sw, i) => {
+    sw.classList.toggle('active', !hasImage && i === saved);
   });
 }
 
@@ -121,8 +161,8 @@ overlayRange.value = savedOverlay; blurRange.value = savedBlur;
 applyOverlay(savedOverlay); applyBlur(savedBlur);
 savedImage ? applyBackground(savedImage, true) : applyBackground(PRESETS[savedPreset], false);
 
-overlayRange.addEventListener('input', () => { applyOverlay(overlayRange.value); Store.set('bgOverlay', overlayRange.value); });
-blurRange.addEventListener('input',    () => { applyBlur(blurRange.value);       Store.set('bgBlur',    blurRange.value);    });
+overlayRange.addEventListener('input', () => { applyOverlay(overlayRange.value); Store.set('bgOverlay', overlayRange.value); clearActiveTheme(); });
+blurRange.addEventListener('input',    () => { applyBlur(blurRange.value);       Store.set('bgBlur',    blurRange.value);    clearActiveTheme(); });
 document.getElementById('bg-upload').addEventListener('change', function() { saveBackgroundImage(this.files[0]); });
 
 const uploadLabel = document.getElementById('upload-label');
@@ -220,8 +260,8 @@ populateFontSelects(); renderCustomFontList();
 applyClockFont(Store.get('clockFontIdx') ?? 0);
 applyUIFont(Store.get('uiFontIdx') ?? 1);
 
-document.getElementById('clock-font-select').addEventListener('change', function() { Store.set('clockFontIdx', +this.value); applyClockFont(+this.value); });
-document.getElementById('ui-font-select').addEventListener('change',    function() { Store.set('uiFontIdx',    +this.value); applyUIFont(+this.value);    });
+document.getElementById('clock-font-select').addEventListener('change', function() { Store.set('clockFontIdx', +this.value); applyClockFont(+this.value); clearActiveTheme(); });
+document.getElementById('ui-font-select').addEventListener('change',    function() { Store.set('uiFontIdx',    +this.value); applyUIFont(+this.value);    clearActiveTheme(); });
 
 document.getElementById('apply-custom-font-btn').addEventListener('click', () => {
   const urlInput  = document.getElementById('custom-font-url').value.trim();
@@ -1456,6 +1496,254 @@ function showToast(text) {
   if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { toastEl.classList.remove('show'); toastEl.classList.add('hide'); }, 1400);
 }
+
+// ─── Theme Presets ─────────────────────────────────────────────────
+const BUILTIN_THEME_PRESETS = [
+  {
+    id: 'midnight-gold',
+    name: 'Midnight Gold',
+    description: 'Elegant dark violet with warm gold.',
+    bgPreset: 0,
+    bgOverlay: 35,
+    bgBlur: 0,
+    accent: '#c9a96e',
+    clockFontName: 'Cormorant Garamond',
+    uiFontName: 'DM Mono',
+  },
+  {
+    id: 'forest-glass',
+    name: 'Forest Glass',
+    description: 'Deep green, soft glow, quiet focus.',
+    bgPreset: 2,
+    bgOverlay: 32,
+    bgBlur: 0,
+    accent: '#7bd88f',
+    clockFontName: 'Raleway',
+    uiFontName: 'IBM Plex Mono',
+  },
+  {
+    id: 'minimal-mono',
+    name: 'Minimal Mono',
+    description: 'Clean grayscale with crisp mono text.',
+    bgPreset: 4,
+    bgOverlay: 42,
+    bgBlur: 0,
+    accent: '#d8d8d8',
+    clockFontName: 'Space Mono',
+    uiFontName: 'DM Mono',
+  },
+  {
+    id: 'cyber-purple',
+    name: 'Cyber Purple',
+    description: 'Neon violet with a futuristic feel.',
+    bgPreset: 7,
+    bgOverlay: 30,
+    bgBlur: 1,
+    accent: '#c084fc',
+    clockFontName: 'Cinzel',
+    uiFontName: 'IBM Plex Mono',
+  },
+  {
+    id: 'ember-night',
+    name: 'Ember Night',
+    description: 'Dark red warmth for late sessions.',
+    bgPreset: 5,
+    bgOverlay: 38,
+    bgBlur: 0,
+    accent: '#ff9f68',
+    clockFontName: 'Playfair Display',
+    uiFontName: 'DM Mono',
+  },
+  {
+    id: 'ocean-depths',
+    name: 'Ocean Depths',
+    description: 'Blue glass with calm contrast.',
+    bgPreset: 6,
+    bgOverlay: 34,
+    bgBlur: 0,
+    accent: '#64d2ff',
+    clockFontName: 'Josefin Sans',
+    uiFontName: 'Space Mono',
+  },
+];
+
+function getCustomThemes() {
+  return (Store.get('customThemes') ?? []).filter(theme => theme && theme.id && theme.name);
+}
+
+function setCustomThemes(themes) {
+  Store.set('customThemes', themes);
+}
+
+function getAllThemes() {
+  return [...BUILTIN_THEME_PRESETS, ...getCustomThemes()];
+}
+
+function findFontIndexByName(name, fallback = 0) {
+  const fonts = getAllFonts();
+  const idx = fonts.findIndex(font => font.name === name);
+  return idx >= 0 ? idx : fallback;
+}
+
+function makeThemeId(name) {
+  return `custom-${String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'theme'}-${Date.now()}`;
+}
+
+function setThemeControls(theme) {
+  const overlay = theme.bgOverlay ?? 35;
+  const blur = theme.bgBlur ?? 0;
+  Store.set('bgOverlay', overlay);
+  Store.set('bgBlur', blur);
+  if (overlayRange) overlayRange.value = overlay;
+  if (blurRange) blurRange.value = blur;
+  applyOverlay(overlay);
+  applyBlur(blur);
+
+  if (theme.bgImage) {
+    Store.set('bgImage', theme.bgImage);
+    applyBackground(theme.bgImage, true);
+    const uploadText = document.getElementById('upload-text');
+    if (uploadText) uploadText.textContent = 'Custom theme image';
+  } else {
+    const preset = Number.isInteger(theme.bgPreset) ? theme.bgPreset : 0;
+    Store.set('bgImage', null);
+    Store.set('bgPreset', preset);
+    applyBackground(PRESETS[preset] ?? PRESETS[0], false);
+    const uploadText = document.getElementById('upload-text');
+    if (uploadText) uploadText.textContent = 'Click or drop an image';
+  }
+  updateBackgroundPresetActive();
+
+  if (theme.accent) applyAccentColor(theme.accent, true);
+
+  const clockIdx = Number.isInteger(theme.clockFontIdx) ? theme.clockFontIdx : findFontIndexByName(theme.clockFontName, Store.get('clockFontIdx') ?? 0);
+  const uiIdx    = Number.isInteger(theme.uiFontIdx)    ? theme.uiFontIdx    : findFontIndexByName(theme.uiFontName,    Store.get('uiFontIdx')    ?? 1);
+  if (getAllFonts()[clockIdx]) {
+    Store.set('clockFontIdx', clockIdx);
+    const sel = document.getElementById('clock-font-select');
+    if (sel) sel.value = clockIdx;
+    applyClockFont(clockIdx);
+  }
+  if (getAllFonts()[uiIdx]) {
+    Store.set('uiFontIdx', uiIdx);
+    const sel = document.getElementById('ui-font-select');
+    if (sel) sel.value = uiIdx;
+    applyUIFont(uiIdx);
+  }
+}
+
+function applyThemePreset(theme) {
+  if (!theme) return;
+  setThemeControls(theme);
+  Store.set('activeThemeId', theme.id);
+  renderThemePresets();
+  showToast(`Theme applied: ${theme.name}`);
+}
+
+function captureThemePreset(name) {
+  const clockIdx = Store.get('clockFontIdx') ?? 0;
+  const uiIdx = Store.get('uiFontIdx') ?? 1;
+  return {
+    id: makeThemeId(name),
+    name,
+    description: 'Custom saved theme.',
+    bgImage: Store.get('bgImage'),
+    bgPreset: Store.get('bgPreset') ?? 0,
+    bgOverlay: +(Store.get('bgOverlay') ?? 35),
+    bgBlur: +(Store.get('bgBlur') ?? 0),
+    accent: Store.get('accentColor') ?? DEFAULT_ACCENT,
+    clockFontIdx,
+    uiFontIdx,
+    clockFontName: getAllFonts()[clockIdx]?.name,
+    uiFontName: getAllFonts()[uiIdx]?.name,
+    custom: true,
+    createdAt: Date.now(),
+  };
+}
+
+function renderThemePresets() {
+  const grid = document.getElementById('theme-preset-grid');
+  if (!grid) return;
+  const activeId = Store.get('activeThemeId');
+  grid.innerHTML = '';
+  getAllThemes().forEach(theme => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = `theme-preset-card${theme.id === activeId ? ' active' : ''}${theme.custom ? ' custom' : ''}`;
+    card.title = theme.description || theme.name;
+    card.addEventListener('click', () => applyThemePreset(theme));
+
+    const preview = document.createElement('div');
+    preview.className = 'theme-preset-preview';
+    preview.style.backgroundImage = theme.bgImage ? `url(${theme.bgImage})` : (PRESETS[theme.bgPreset] ?? PRESETS[0]);
+
+    const shade = document.createElement('span');
+    shade.className = 'theme-preset-shade';
+    shade.style.background = `rgba(0,0,0,${(theme.bgOverlay ?? 35) / 100})`;
+
+    const accent = document.createElement('span');
+    accent.className = 'theme-preset-accent';
+    accent.style.background = normalizeHexColor(theme.accent ?? DEFAULT_ACCENT);
+
+    preview.appendChild(shade);
+    preview.appendChild(accent);
+
+    const name = document.createElement('span');
+    name.className = 'theme-preset-name';
+    name.textContent = theme.name;
+
+    const desc = document.createElement('span');
+    desc.className = 'theme-preset-desc';
+    desc.textContent = theme.custom ? 'Custom' : (theme.description || 'Preset theme');
+
+    card.appendChild(preview);
+    card.appendChild(name);
+    card.appendChild(desc);
+    grid.appendChild(card);
+  });
+}
+
+function clearActiveTheme() {
+  if (!Store.get('activeThemeId')) return;
+  Store.set('activeThemeId', null);
+  renderThemePresets();
+}
+
+const saveThemeBtn = document.getElementById('save-theme-btn');
+const deleteThemeBtn = document.getElementById('delete-theme-btn');
+const themeNameInput = document.getElementById('theme-name');
+
+if (saveThemeBtn && themeNameInput) {
+  saveThemeBtn.addEventListener('click', () => {
+    const name = themeNameInput.value.trim() || `Theme ${getCustomThemes().length + 1}`;
+    const themes = getCustomThemes();
+    const theme = captureThemePreset(name);
+    themes.push(theme);
+    setCustomThemes(themes);
+    Store.set('activeThemeId', theme.id);
+    themeNameInput.value = '';
+    renderThemePresets();
+    showToast(`Theme saved: ${name}`);
+  });
+}
+
+if (deleteThemeBtn) {
+  deleteThemeBtn.addEventListener('click', () => {
+    const activeId = Store.get('activeThemeId');
+    if (!activeId || !String(activeId).startsWith('custom-')) {
+      showToast('Select a custom theme first');
+      return;
+    }
+    const before = getCustomThemes();
+    const theme = before.find(item => item.id === activeId);
+    setCustomThemes(before.filter(item => item.id !== activeId));
+    Store.set('activeThemeId', null);
+    renderThemePresets();
+    showToast(`Deleted theme: ${theme?.name ?? 'Custom'}`);
+  });
+}
+
+renderThemePresets();
 
 const backdrop = document.getElementById('backdrop');
 let activePanel = null;
