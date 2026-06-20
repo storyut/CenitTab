@@ -86,6 +86,258 @@ const bgOverlay    = document.getElementById('bg-overlay');
 const overlayRange = document.getElementById('overlay-range');
 const blurRange    = document.getElementById('blur-range');
 const blurVal      = document.getElementById('blur-val');
+const BG_IMAGE_DB_NAME = 'cenit-background-images';
+const BG_IMAGE_DB_VERSION = 1;
+const BG_IMAGE_STORE = 'images';
+const BG_IMAGE_REF_KIND = 'indexedDBImage';
+let activeBgObjectUrl = null;
+
+function isLegacyDataImage(value) {
+  return typeof value === 'string' && value.startsWith('data:image/');
+}
+function isBackgroundImageRef(value) {
+  return value && typeof value === 'object' && value.kind === BG_IMAGE_REF_KIND && typeof value.key === 'string';
+}
+function makeBackgroundImageKey(prefix = 'background') {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+function setStoredValue(key, value) {
+  try { Store.set(key, value); }
+  catch (err) {
+    localStorage.removeItem(key);
+    Store.set(key, value);
+  }
+}
+function openBackgroundImageDb() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) {
+      reject(new Error('IndexedDB is not available'));
+      return;
+    }
+    const request = indexedDB.open(BG_IMAGE_DB_NAME, BG_IMAGE_DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(BG_IMAGE_STORE)) db.createObjectStore(BG_IMAGE_STORE);
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('Could not open image storage'));
+  });
+}
+function withBackgroundImageStore(mode, action) {
+  return openBackgroundImageDb().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(BG_IMAGE_STORE, mode);
+    const store = tx.objectStore(BG_IMAGE_STORE);
+    let request;
+    tx.oncomplete = () => { db.close(); resolve(request?.result); };
+    tx.onerror = () => { db.close(); reject(tx.error || new Error('Image storage failed')); };
+    try { request = action(store); }
+    catch (err) { db.close(); reject(err); }
+  }));
+}
+function saveBackgroundImageBlob(key, blob) {
+  return withBackgroundImageStore('readwrite', store => store.put(blob, key));
+}
+function getBackgroundImageBlob(key) {
+  return withBackgroundImageStore('readonly', store => store.get(key));
+}
+function dataUrlToBlob(dataUrl) {
+  const [header, data] = String(dataUrl).split(',');
+  if (!header || !data) throw new Error('Invalid image data URL');
+  const type = header.match(/^data:([^;]+)/)?.[1] || 'image/png';
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type });
+}
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('Could not read image asset'));
+    reader.readAsDataURL(blob);
+  });
+}
+function collectBackgroundImageRefs(value, refs = new Map(), seen = new Set()) {
+  if (!value || typeof value !== 'object') return refs;
+  if (seen.has(value)) return refs;
+  seen.add(value);
+  if (isBackgroundImageRef(value)) {
+    refs.set(value.key, value);
+    return refs;
+  }
+  if (Array.isArray(value)) {
+    value.forEach(item => collectBackgroundImageRefs(item, refs, seen));
+    return refs;
+  }
+  Object.values(value).forEach(item => collectBackgroundImageRefs(item, refs, seen));
+  return refs;
+}
+async function collectBackgroundImageAssets(storage) {
+  const refs = collectBackgroundImageRefs(storage);
+  const images = {};
+  for (const [key, ref] of refs) {
+    const blob = await getBackgroundImageBlob(key);
+    if (!blob) continue;
+    images[key] = {
+      ...ref,
+      type: ref.type || blob.type,
+      size: ref.size || blob.size,
+      dataUrl: await blobToDataUrl(blob),
+    };
+  }
+  return images;
+}
+async function saveImportedBackgroundAssets(assets) {
+  const images = assets?.backgroundImages;
+  if (!images || typeof images !== 'object') return;
+  for (const [key, asset] of Object.entries(images)) {
+    if (!asset?.dataUrl) continue;
+    await saveBackgroundImageBlob(key, dataUrlToBlob(asset.dataUrl));
+  }
+}
+async function prepareImportedBackgroundStorage(storage, assets) {
+  await saveImportedBackgroundAssets(assets);
+  const prepared = { ...storage };
+  if (isLegacyDataImage(prepared.bgImage)) {
+    prepared.bgImage = await persistDataUrlAsBackgroundImage(prepared.bgImage);
+  }
+  if (Array.isArray(prepared.customThemes)) {
+    const themes = [];
+    for (const theme of prepared.customThemes) {
+      if (theme && isLegacyDataImage(theme.bgImage)) {
+        themes.push({ ...theme, bgImage: await persistDataUrlAsBackgroundImage(theme.bgImage, theme.name || 'Theme background') });
+      } else {
+        themes.push(theme);
+      }
+    }
+    prepared.customThemes = themes;
+  }
+  if (prepared.layoutProfiles && typeof prepared.layoutProfiles === 'object' && !Array.isArray(prepared.layoutProfiles)) {
+    const profiles = {};
+    for (const [name, profile] of Object.entries(prepared.layoutProfiles)) {
+      const image = profile?.backgroundDetails?.bgImage;
+      if (isLegacyDataImage(image)) {
+        profiles[name] = {
+          ...profile,
+          backgroundDetails: {
+            ...profile.backgroundDetails,
+            bgImage: await persistDataUrlAsBackgroundImage(image, `${name} background`),
+          },
+        };
+      } else {
+        profiles[name] = profile;
+      }
+    }
+    prepared.layoutProfiles = profiles;
+  }
+  return prepared;
+}
+async function persistDataUrlAsBackgroundImage(dataUrl, name = 'Background image') {
+  const blob = dataUrlToBlob(dataUrl);
+  const key = makeBackgroundImageKey('migrated-background');
+  await saveBackgroundImageBlob(key, blob);
+  return {
+    kind: BG_IMAGE_REF_KIND,
+    key,
+    name,
+    type: blob.type,
+    size: blob.size,
+    updatedAt: Date.now(),
+  };
+}
+async function normalizeBackgroundImageValue(value, name) {
+  if (isBackgroundImageRef(value)) return value;
+  if (isLegacyDataImage(value)) return persistDataUrlAsBackgroundImage(value, name);
+  return value || null;
+}
+async function resolveBackgroundImageUrl(value) {
+  if (!value) return null;
+  if (isLegacyDataImage(value)) return value;
+  if (!isBackgroundImageRef(value)) return typeof value === 'string' ? value : null;
+  const blob = await getBackgroundImageBlob(value.key);
+  return blob ? URL.createObjectURL(blob) : null;
+}
+function setBackgroundImageUrl(url) {
+  if (activeBgObjectUrl) URL.revokeObjectURL(activeBgObjectUrl);
+  activeBgObjectUrl = url?.startsWith('blob:') ? url : null;
+  bgLayer.style.backgroundImage    = `url(${url})`;
+  bgLayer.style.backgroundSize     = 'cover';
+  bgLayer.style.backgroundPosition = 'center';
+}
+async function applyStoredBackgroundImage(value, options = {}) {
+  try {
+    const normalized = await normalizeBackgroundImageValue(value, options.name);
+    if (options.persist) setStoredValue('bgImage', normalized);
+    const url = await resolveBackgroundImageUrl(normalized);
+    if (!url) throw new Error('Saved image was not found');
+    setBackgroundImageUrl(url);
+    return true;
+  } catch (err) {
+    console.warn('Could not load background image', err);
+    if (options.persist) setStoredValue('bgImage', null);
+    return false;
+  }
+}
+async function applyStoredBackgroundPreview(preview, value) {
+  try {
+    const url = await resolveBackgroundImageUrl(value);
+    if (!url || !preview.isConnected) {
+      if (url?.startsWith('blob:')) URL.revokeObjectURL(url);
+      return;
+    }
+    preview.style.backgroundImage = `url(${url})`;
+    if (url.startsWith('blob:')) preview.dataset.objectUrl = url;
+  } catch (err) {
+    console.warn('Could not load theme preview image', err);
+  }
+}
+async function migrateLegacyBackgroundImages() {
+  try {
+    const currentImage = Store.get('bgImage');
+    if (isLegacyDataImage(currentImage)) {
+      setStoredValue('bgImage', await persistDataUrlAsBackgroundImage(currentImage));
+    }
+
+    const themes = Store.get('customThemes');
+    if (Array.isArray(themes)) {
+      let changed = false;
+      const migratedThemes = [];
+      for (const theme of themes) {
+        if (theme && isLegacyDataImage(theme.bgImage)) {
+          migratedThemes.push({ ...theme, bgImage: await persistDataUrlAsBackgroundImage(theme.bgImage, theme.name || 'Theme background') });
+          changed = true;
+        } else {
+          migratedThemes.push(theme);
+        }
+      }
+      if (changed) setStoredValue('customThemes', migratedThemes);
+    }
+
+    const profiles = Store.get('layoutProfiles');
+    if (profiles && typeof profiles === 'object' && !Array.isArray(profiles)) {
+      let changed = false;
+      const migratedProfiles = {};
+      for (const [name, profile] of Object.entries(profiles)) {
+        const image = profile?.backgroundDetails?.bgImage;
+        if (isLegacyDataImage(image)) {
+          migratedProfiles[name] = {
+            ...profile,
+            backgroundDetails: {
+              ...profile.backgroundDetails,
+              bgImage: await persistDataUrlAsBackgroundImage(image, `${name} background`),
+            },
+          };
+          changed = true;
+        } else {
+          migratedProfiles[name] = profile;
+        }
+      }
+      if (changed) setStoredValue('layoutProfiles', migratedProfiles);
+    }
+  } catch (err) {
+    console.warn('Could not migrate saved background images', err);
+  }
+}
 
 const PRESETS = [
   'linear-gradient(135deg,#0f0c29,#302b63,#24243e)',
@@ -101,25 +353,36 @@ const PRESETS = [
 
 function applyBackground(value, isImage) {
   if (isImage) {
-    bgLayer.style.backgroundImage    = `url(${value})`;
-    bgLayer.style.backgroundSize     = 'cover';
-    bgLayer.style.backgroundPosition = 'center';
+    setBackgroundImageUrl(value);
   } else {
+    if (activeBgObjectUrl) URL.revokeObjectURL(activeBgObjectUrl);
+    activeBgObjectUrl = null;
     bgLayer.style.backgroundImage = value;
   }
 }
 
-function saveBackgroundImage(file) {
+async function saveBackgroundImage(file) {
   if (!file || !file.type.startsWith('image/')) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    Store.set('bgImage', e.target.result);
-    applyBackground(e.target.result, true);
+  const key = makeBackgroundImageKey('background');
+  const imageRef = {
+    kind: BG_IMAGE_REF_KIND,
+    key,
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    updatedAt: Date.now(),
+  };
+  try {
+    await saveBackgroundImageBlob(key, file);
+    setStoredValue('bgImage', imageRef);
+    setBackgroundImageUrl(URL.createObjectURL(file));
     document.getElementById('upload-text').textContent = file.name;
     updateBackgroundPresetActive();
     clearActiveTheme();
-  };
-  reader.readAsDataURL(file);
+  } catch (err) {
+    console.error('Could not save background image', err);
+    showToast('Image could not be saved');
+  }
 }
 function applyOverlay(pct) { bgOverlay.style.background = `rgba(0,0,0,${pct/100})`; }
 function applyBlur(px) {
@@ -159,7 +422,7 @@ const savedOverlay = Store.get('bgOverlay') ?? 35;
 const savedBlur    = Store.get('bgBlur')    ?? 0;
 overlayRange.value = savedOverlay; blurRange.value = savedBlur;
 applyOverlay(savedOverlay); applyBlur(savedBlur);
-savedImage ? applyBackground(savedImage, true) : applyBackground(PRESETS[savedPreset], false);
+applyBackground(PRESETS[savedPreset], false);
 
 overlayRange.addEventListener('input', () => { applyOverlay(overlayRange.value); Store.set('bgOverlay', overlayRange.value); clearActiveTheme(); });
 blurRange.addEventListener('input',    () => { applyBlur(blurRange.value);       Store.set('bgBlur',    blurRange.value);    clearActiveTheme(); });
@@ -169,8 +432,31 @@ const uploadLabel = document.getElementById('upload-label');
 ['dragenter','dragover'].forEach(ev => uploadLabel.addEventListener(ev, (e) => { e.preventDefault(); uploadLabel.classList.add('drag-over'); }));
 ['dragleave','drop'].forEach(ev => uploadLabel.addEventListener(ev, (e) => { e.preventDefault(); uploadLabel.classList.remove('drag-over'); }));
 uploadLabel.addEventListener('drop', (e) => { saveBackgroundImage(e.dataTransfer.files[0]); });
-['dragover','drop'].forEach(ev => document.addEventListener(ev, (e) => { if (!uploadLabel.contains(e.target)) e.preventDefault(); }));
+document.addEventListener('dragover', (e) => { if (!uploadLabel.contains(e.target)) e.preventDefault(); });
+document.addEventListener('drop', (e) => {
+  if (uploadLabel.contains(e.target)) return;
+  e.preventDefault();
+  const raw = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain')).trim();
+  if (!raw || !looksLikeUrl(raw)) return;
+  const url = normalizeUrl(raw);
+  const hostname = (() => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; } })();
+  const bms = getBookmarks();
+  bms.push({ name: hostname, url, folderId: getActiveBookmarkFolderId() });
+  setBookmarks(bms);
+  loadBookmarks();
+  showToast(`Bookmarked: ${hostname}`);
+});
 buildPresetGrid();
+if (savedImage) {
+  applyStoredBackgroundImage(savedImage, { persist: true }).then(ok => {
+    if (!ok) {
+      applyBackground(PRESETS[Store.get('bgPreset') ?? 0], false);
+      updateBackgroundPresetActive();
+    }
+  }).finally(migrateLegacyBackgroundImages);
+} else {
+  migrateLegacyBackgroundImages();
+}
 
 // ─── Fonts ──────────────────────────────────────────────────────────
 const BUILTIN_FONTS = [
@@ -266,7 +552,7 @@ document.getElementById('ui-font-select').addEventListener('change',    function
 document.getElementById('apply-custom-font-btn').addEventListener('click', () => {
   const urlInput  = document.getElementById('custom-font-url').value.trim();
   const nameInput = document.getElementById('custom-font-name').value.trim();
-  if (!nameInput) { alert('Please enter a font family name.'); return; }
+  if (!nameInput) { showToast('Enter a font family name'); return; }
   let cssUrl = urlInput;
   const importMatch = urlInput.match(/url\(['"]?([^'")\s]+)['"]?\)/);
   if (importMatch) cssUrl = importMatch[1];
@@ -384,7 +670,11 @@ function resolveSearchDestination(rawValue) {
   if (firstSpace > 0) {
     const shortcut = value.slice(0, firstSpace).toLowerCase();
     const rest = value.slice(firstSpace + 1).trim();
-    if (rest && SEARCH_SHORTCUTS[shortcut]) return buildSearchUrl(SEARCH_SHORTCUTS[shortcut], rest);
+    if (rest) {
+      const customBang = (Store.get('customBangs') ?? []).find(b => b.key === shortcut);
+      if (customBang) return customBang.url.replace('%s', encodeURIComponent(rest));
+      if (SEARCH_SHORTCUTS[shortcut]) return buildSearchUrl(SEARCH_SHORTCUTS[shortcut], rest);
+    }
   }
   return buildSearchUrl(getDefaultSearchEngine(), value);
 }
@@ -412,6 +702,128 @@ if (searchForm && searchInput) {
       searchInput.focus();
       searchInput.select();
     }
+  });
+}
+
+// ─── Custom Search Bangs ─────────────────────────────────────────────
+function renderCustomBangList() {
+  const list = document.getElementById('custom-bang-list');
+  if (!list) return;
+  const bangs = Store.get('customBangs') ?? [];
+  list.innerHTML = '';
+  bangs.forEach((bang, i) => {
+    const row = document.createElement('div');
+    row.className = 'bang-row';
+    const key = document.createElement('span');
+    key.className = 'bang-key'; key.textContent = bang.key;
+    const url = document.createElement('span');
+    url.className = 'bang-url'; url.textContent = bang.url;
+    const del = document.createElement('button');
+    del.className = 'bm-del'; del.textContent = '✕'; del.title = 'Remove';
+    del.addEventListener('click', () => {
+      const b = Store.get('customBangs') ?? [];
+      b.splice(i, 1);
+      Store.set('customBangs', b);
+      renderCustomBangList();
+    });
+    row.appendChild(key); row.appendChild(url); row.appendChild(del);
+    list.appendChild(row);
+  });
+}
+document.getElementById('add-bang-btn')?.addEventListener('click', () => {
+  const keyEl = document.getElementById('bang-key-input');
+  const urlEl = document.getElementById('bang-url-input');
+  const key = (keyEl?.value ?? '').trim().toLowerCase().replace(/\s+/g, '');
+  const url = (urlEl?.value ?? '').trim();
+  if (!key || !url) { showToast('Key and URL required'); return; }
+  if (!url.includes('%s')) { showToast('URL must contain %s'); return; }
+  const bangs = Store.get('customBangs') ?? [];
+  if (bangs.some(b => b.key === key)) { showToast(`Bang "${key}" already exists`); return; }
+  bangs.push({ key, url });
+  Store.set('customBangs', bangs);
+  if (keyEl) keyEl.value = '';
+  if (urlEl) urlEl.value = '';
+  renderCustomBangList();
+  showToast(`Bang "${key}" added`);
+});
+renderCustomBangList();
+
+// ─── Bookmark Widget Context Menu ────────────────────────────────────
+let bmCtxMenu = null;
+function closeBmContextMenu() { bmCtxMenu?.remove(); bmCtxMenu = null; }
+function showBmContextMenu(x, y, bm, idx) {
+  closeBmContextMenu();
+  const menu = document.createElement('div');
+  menu.className = 'bm-ctx-menu';
+  const items = [
+    { label: 'Rename', action: () => {
+      const newName = window.prompt('Rename bookmark', bm.name)?.trim();
+      if (!newName) return;
+      const list = getBookmarks(); list[idx] = { ...list[idx], name: newName };
+      setBookmarks(list); loadBookmarks();
+    }},
+    { label: 'Edit URL', action: () => {
+      const newUrl = window.prompt('Edit URL', bm.url)?.trim();
+      if (!newUrl) return;
+      const list = getBookmarks(); list[idx] = { ...list[idx], url: newUrl };
+      setBookmarks(list); loadBookmarks();
+    }},
+    { label: 'Delete', danger: true, action: () => {
+      const list = getBookmarks(); const removed = list[idx];
+      list.splice(idx, 1); setBookmarks(list); loadBookmarks();
+      showToast(`Deleted: ${removed.name}`, () => {
+        const cur = getBookmarks(); cur.splice(idx, 0, removed); setBookmarks(cur); loadBookmarks();
+      });
+    }},
+  ];
+  items.forEach(({ label, action, danger }) => {
+    const btn = document.createElement('button');
+    btn.className = 'bm-ctx-item' + (danger ? ' danger' : '');
+    btn.textContent = label;
+    btn.addEventListener('click', () => { closeBmContextMenu(); action(); });
+    menu.appendChild(btn);
+  });
+  const vw = window.innerWidth, vh = window.innerHeight;
+  menu.style.cssText = `left:${Math.min(x, vw - 140)}px;top:${Math.min(y, vh - 110)}px`;
+  document.body.appendChild(menu);
+  bmCtxMenu = menu;
+}
+document.addEventListener('click', () => closeBmContextMenu());
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeBmContextMenu(); });
+
+// ─── Settings Search ─────────────────────────────────────────────────
+function initSettingsSearch() {
+  const input = document.getElementById('settings-search-input');
+  const body = document.querySelector('#settings-panel .panel-body');
+  if (!input || !body) return;
+  input.addEventListener('input', () => {
+    const q = input.value.trim().toLowerCase();
+    const all = [...body.children].filter(el => el !== input);
+    if (!q) { all.forEach(el => el.style.display = ''); return; }
+    let sections = [], cur = null;
+    all.forEach(el => {
+      if (el.classList.contains('label')) {
+        cur = { els: [el], text: el.textContent.toLowerCase() };
+        sections.push(cur);
+      } else if (el.classList.contains('divider')) {
+        sections.push({ divider: true, el });
+      } else {
+        if (!cur) { cur = { els: [], text: '' }; sections.push(cur); }
+        cur.els.push(el);
+        cur.text += ' ' + el.textContent.toLowerCase();
+      }
+    });
+    sections.forEach(sec => {
+      if (sec.divider) return;
+      sec.match = sec.text.includes(q);
+      sec.els.forEach(el => el.style.display = sec.match ? '' : 'none');
+    });
+    sections.forEach((sec, i) => {
+      if (!sec.divider) return;
+      const before = sections.slice(0, i).filter(s => !s.divider);
+      const after = sections.slice(i + 1).filter(s => !s.divider);
+      sec.el.style.display = before.some(s => s.match) && after.some(s => s.match) ? '' : 'none';
+    });
   });
 }
 
@@ -592,12 +1004,17 @@ if (notesDeleteBtn) {
   notesDeleteBtn.addEventListener('click', () => {
     const notes = getNotes();
     const activeId = Store.get('activeNoteId') || getActiveNote(notes)?.id;
+    const removed = notes.find(note => note.id === activeId);
     let next = notes.filter(note => note.id !== activeId);
     if (!next.length) next = [makeNote('')];
     setNotes(next);
     Store.set('activeNoteId', sortNotes(next)[0].id);
     renderActiveNote();
     flashNotesSaved();
+    if (removed) showToast(`Deleted: ${removed.title || 'Note'}`, () => {
+      const cur = getNotes(); cur.push(removed); setNotes(cur);
+      Store.set('activeNoteId', removed.id); renderActiveNote();
+    });
   });
 }
 if (notesClearBtn) {
@@ -800,6 +1217,7 @@ function renderBookmarkWidget(bookmarks, folders) {
   }
 
   selectedBookmarks.forEach((bm) => {
+    const globalIdx = bookmarks.indexOf(bm);
     const a = document.createElement('a');
     a.className = 'bm-item'; a.href = bm.url; a.title = `${bm.name} · ${bm.url}`;
     const fav = getFavicon(bm.url);
@@ -809,6 +1227,10 @@ function renderBookmarkWidget(bookmarks, folders) {
       a.appendChild(img);
     }
     a.appendChild(document.createTextNode(bm.name));
+    a.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showBmContextMenu(e.clientX, e.clientY, bm, globalIdx);
+    });
     bookmarkList.appendChild(a);
   });
 }
@@ -924,9 +1346,14 @@ function loadBookmarks() {
     del.addEventListener('click', (e) => {
       e.stopPropagation();
       const list = getBookmarks();
-      list.splice(+row.dataset.index, 1);
+      const idx = +row.dataset.index;
+      const removed = list[idx];
+      list.splice(idx, 1);
       setBookmarks(list);
       loadBookmarks();
+      showToast(`Deleted: ${removed.name}`, () => {
+        const cur = getBookmarks(); cur.splice(idx, 0, removed); setBookmarks(cur); loadBookmarks();
+      });
     });
 
     // ── Apply edits ──
@@ -970,6 +1397,7 @@ document.getElementById('save-bm-btn').addEventListener('click', () => {
   if (!name || !url) return;
   if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
   const bms = getBookmarks();
+  if (bms.some(b => b.url === url)) { showToast('Bookmark already exists'); return; }
   bms.push({ name, url, folderId });
   setBookmarks(bms);
   Store.set('activeBookmarkFolderId', folderId);
@@ -1688,11 +2116,17 @@ function applyLayoutProfile(profile) {
   });
   if (profile.backgroundDetails) {
     const d = profile.backgroundDetails;
-    if (d.bgImage  !== undefined) Store.set('bgImage',  d.bgImage);
     if (d.bgPreset !== undefined) Store.set('bgPreset', d.bgPreset);
     if (d.bgOverlay !== undefined) { Store.set('bgOverlay', d.bgOverlay); if (overlayRange) overlayRange.value = d.bgOverlay; applyOverlay(d.bgOverlay); }
     if (d.bgBlur    !== undefined) { Store.set('bgBlur',    d.bgBlur);    if (blurRange)    blurRange.value    = d.bgBlur;    applyBlur(d.bgBlur);       }
-    d.bgImage ? applyBackground(d.bgImage, true) : applyBackground(PRESETS[d.bgPreset ?? (Store.get('bgPreset') ?? 0)], false);
+    if (d.bgImage) {
+      applyStoredBackgroundImage(d.bgImage, { persist: true, name: `${Store.get('activeLayoutProfile') || 'Layout'} background` }).then(ok => {
+        if (!ok) applyBackground(PRESETS[d.bgPreset ?? (Store.get('bgPreset') ?? 0)], false);
+      });
+    } else {
+      Store.set('bgImage', null);
+      applyBackground(PRESETS[d.bgPreset ?? (Store.get('bgPreset') ?? 0)], false);
+    }
   }
   Store.set('hideGreeting', !!profile.clockDetails?.hideGreeting);
   Store.set('hideDate',     !!profile.clockDetails?.hideDate);
@@ -1740,9 +2174,15 @@ profileSelect.addEventListener('change', () => {
 });
 deleteProfileBtn.addEventListener('click', () => {
   const name = profileSelect.value; if (!name) return;
-  const profiles = getProfiles(); delete profiles[name]; setProfiles(profiles);
+  const profiles = getProfiles();
+  const snapshot = profiles[name];
+  delete profiles[name]; setProfiles(profiles);
   if (Store.get('activeLayoutProfile') === name) Store.set('activeLayoutProfile', null);
-  renderProfileOptions(); showToast(`Deleted layout: ${name}`);
+  renderProfileOptions();
+  showToast(`Deleted layout: ${name}`, () => {
+    const cur = getProfiles(); cur[name] = snapshot; setProfiles(cur);
+    Store.set('activeLayoutProfile', name); renderProfileOptions();
+  });
 });
 renderProfileOptions();
 
@@ -1751,7 +2191,7 @@ const exportSettingsBtn = document.getElementById('export-settings-btn');
 const importSettingsBtn = document.getElementById('import-settings-btn');
 const importSettingsFile = document.getElementById('import-settings-file');
 
-function collectSettingsBackup() {
+async function collectSettingsBackup() {
   const storage = {};
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
@@ -1764,23 +2204,31 @@ function collectSettingsBackup() {
     version: '1.2.0',
     exportedAt: new Date().toISOString(),
     storage,
+    assets: {
+      backgroundImages: await collectBackgroundImageAssets(storage),
+    },
   };
 }
-function downloadSettingsBackup() {
-  const backup = collectSettingsBackup();
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  const stamp = new Date().toISOString().slice(0, 10);
-  a.href = url;
-  a.download = `cenit-settings-${stamp}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-  showToast('Settings exported');
+async function downloadSettingsBackup() {
+  try {
+    const backup = await collectSettingsBackup();
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `cenit-settings-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast('Settings exported');
+  } catch (err) {
+    console.error('Export failed', err);
+    showToast('Export failed');
+  }
 }
-function restoreSettingsBackup(text) {
+async function restoreSettingsBackup(text) {
   let parsed;
   try { parsed = JSON.parse(text); }
   catch { showToast('Invalid backup file'); return; }
@@ -1790,8 +2238,16 @@ function restoreSettingsBackup(text) {
   }
   const ok = window.confirm('Importing will replace your current Cenit settings. Continue?');
   if (!ok) return;
+  let preparedStorage;
+  try {
+    preparedStorage = await prepareImportedBackgroundStorage(storage, parsed?.assets);
+  } catch (err) {
+    console.error('Import failed', err);
+    showToast('Import failed');
+    return;
+  }
   localStorage.clear();
-  Object.entries(storage).forEach(([key, value]) => {
+  Object.entries(preparedStorage).forEach(([key, value]) => {
     localStorage.setItem(key, JSON.stringify(value));
   });
   showToast('Settings imported');
@@ -1816,10 +2272,25 @@ const toastEl = document.createElement('div');
 toastEl.className = 'profile-toast hide'; toastEl.setAttribute('role','status'); toastEl.setAttribute('aria-live','polite');
 document.body.appendChild(toastEl);
 let toastTimer = null;
-function showToast(text) {
-  toastEl.textContent = text; toastEl.classList.remove('hide'); toastEl.classList.add('show');
+function showToast(text, undoFn) {
+  toastEl.innerHTML = '';
+  const msg = document.createElement('span');
+  msg.textContent = text;
+  toastEl.appendChild(msg);
+  toastEl.classList.toggle('has-undo', !!undoFn);
+  if (undoFn) {
+    const btn = document.createElement('button');
+    btn.className = 'toast-undo-btn';
+    btn.textContent = 'Undo';
+    btn.addEventListener('click', () => {
+      undoFn();
+      toastEl.classList.remove('show'); toastEl.classList.add('hide');
+    });
+    toastEl.appendChild(btn);
+  }
+  toastEl.classList.remove('hide'); toastEl.classList.add('show');
   if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { toastEl.classList.remove('show'); toastEl.classList.add('hide'); }, 1400);
+  toastTimer = setTimeout(() => { toastEl.classList.remove('show'); toastEl.classList.add('hide'); }, undoFn ? 4000 : 1400);
 }
 
 // ─── Theme Presets ─────────────────────────────────────────────────
@@ -1925,8 +2396,7 @@ function setThemeControls(theme) {
   applyBlur(blur);
 
   if (theme.bgImage) {
-    Store.set('bgImage', theme.bgImage);
-    applyBackground(theme.bgImage, true);
+    applyStoredBackgroundImage(theme.bgImage, { persist: true, name: theme.name || 'Theme background' });
     const uploadText = document.getElementById('upload-text');
     if (uploadText) uploadText.textContent = 'Custom theme image';
   } else {
@@ -1990,6 +2460,7 @@ function renderThemePresets() {
   const grid = document.getElementById('theme-preset-grid');
   if (!grid) return;
   const activeId = Store.get('activeThemeId');
+  grid.querySelectorAll('[data-object-url]').forEach(el => URL.revokeObjectURL(el.dataset.objectUrl));
   grid.innerHTML = '';
   getAllThemes().forEach(theme => {
     const card = document.createElement('button');
@@ -2000,7 +2471,8 @@ function renderThemePresets() {
 
     const preview = document.createElement('div');
     preview.className = 'theme-preset-preview';
-    preview.style.backgroundImage = theme.bgImage ? `url(${theme.bgImage})` : (PRESETS[theme.bgPreset] ?? PRESETS[0]);
+    preview.style.backgroundImage = PRESETS[theme.bgPreset] ?? PRESETS[0];
+    if (theme.bgImage) applyStoredBackgroundPreview(preview, theme.bgImage);
 
     const shade = document.createElement('span');
     shade.className = 'theme-preset-shade';
@@ -2064,7 +2536,12 @@ if (deleteThemeBtn) {
     setCustomThemes(before.filter(item => item.id !== activeId));
     Store.set('activeThemeId', null);
     renderThemePresets();
-    showToast(`Deleted theme: ${theme?.name ?? 'Custom'}`);
+    showToast(`Deleted theme: ${theme?.name ?? 'Custom'}`, () => {
+      if (!theme) return;
+      setCustomThemes([...getCustomThemes(), theme]);
+      Store.set('activeThemeId', theme.id);
+      renderThemePresets();
+    });
   });
 }
 
@@ -2115,6 +2592,12 @@ backdrop.addEventListener('click', () => { if (activePanel) closePanel(activePan
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && activePanel) closePanel(activePanel); });
 
 document.getElementById('reset-layout-default-btn')?.addEventListener('click', () => {
+  const snapshot = JSON.parse(JSON.stringify(Store.get('widgetPositions') ?? {}));
   resetWidgetPositions();
-  showToast('Layout reset to defaults');
+  showToast('Layout reset to defaults', () => {
+    Store.set('widgetPositions', snapshot);
+    loadWidgetPositions();
+  });
 });
+
+initSettingsSearch();

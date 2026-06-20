@@ -122,6 +122,7 @@
       <button class="close-btn" data-target="settings-panel">✕</button>
     </div>
     <div class="panel-body">
+      <input class="input settings-search-input" id="settings-search-input" type="search" placeholder="Search settings…" autocomplete="off" spellcheck="false"/>
       <p class="label">Theme Presets</p>
       <div id="theme-preset-grid" class="theme-preset-grid"></div>
       <input class="input" type="text" id="theme-name" placeholder="Custom theme name"/>
@@ -236,6 +237,14 @@
         <option value="wikipedia">Wikipedia</option>
       </select>
       <p class="settings-help">Tip: use shortcuts like <strong>yt music</strong>, <strong>gh react</strong>, <strong>w javascript</strong>, or press <strong>/</strong> to focus search.</p>
+      <p class="label" style="margin-top:16px">Custom Search Bangs</p>
+      <div class="bang-add-row">
+        <input class="input" id="bang-key-input" placeholder="key (e.g. npm)" style="flex:0.4"/>
+        <input class="input" id="bang-url-input" placeholder="URL with %s" style="flex:1"/>
+      </div>
+      <button class="action-btn" id="add-bang-btn" type="button">Add Bang</button>
+      <div id="custom-bang-list"></div>
+      <p class="settings-help">Type <strong>npm react</strong> to search with your bang. URL must contain <strong>%s</strong>.</p>
       <div class="divider"></div>
       <p class="label">Recently Visited</p>
       <input class="input" type="number" id="recent-count-input" min="1" max="12" value="5"/>
