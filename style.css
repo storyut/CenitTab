@@ -1377,3 +1377,15 @@ body.layout-mode .widget:hover .widget-resize-handle { opacity: 1; }
 .import-preview-body { font-size: 13px; color: var(--text); margin-bottom: 20px; line-height: 1.7; }
 .import-preview-body .warn { color: #ffa726; }
 .import-preview-actions { display: flex; gap: 10px; }
+
+/* ── Widget Style Presets ── */
+.widget-preset-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.widget-preset-btn {
+  padding: 5px 12px; border-radius: 20px; font-size: 11px;
+  border: 1px solid var(--glass-border); background: var(--glass);
+  color: var(--text-dim); cursor: pointer; transition: all 0.18s;
+  font-family: var(--font-mono); letter-spacing: 0.08em;
+}
+.widget-preset-btn:hover, .widget-preset-btn.active {
+  border-color: var(--accent); background: var(--accent-dim); color: var(--accent);
+}

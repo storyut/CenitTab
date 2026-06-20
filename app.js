@@ -1526,6 +1526,32 @@ setInterval(loadMediaStatus, 5000);
 // ─── Widget System ──────────────────────────────────────────────────
 const WIDGETS = ['clock','search','bookmarks','recent','media','notes'];
 
+// ─── Widget Style Presets ──────────────────────────────────────────
+const WIDGET_STYLE_PRESETS = {
+  glass:    { opacity: 100, radius: 8,  background: true,  border: true  },
+  compact:  { opacity: 85,  radius: 4,  background: true,  border: false },
+  plain:    { opacity: 100, radius: 12, background: false, border: false },
+  terminal: { opacity: 95,  radius: 0,  background: true,  border: true,  accent: '#00ff88' },
+  cardless: { opacity: 100, radius: 0,  background: false, border: false },
+};
+
+function applyWidgetStylePreset(widgetId, presetKey) {
+  const preset = WIDGET_STYLE_PRESETS[presetKey];
+  if (!preset) return;
+  const current = Store.get(widgetAppearanceKey(widgetId)) ?? {};
+  const next = {
+    ...current,
+    opacity: preset.opacity,
+    radius: preset.radius,
+    background: preset.background,
+    border: preset.border,
+    ...(preset.accent ? { accent: preset.accent } : {}),
+  };
+  Store.set(widgetAppearanceKey(widgetId), next);
+  applyWidgetAppearance(widgetId);
+  loadWidgetAppearanceControls();
+}
+
 // ─── Per-widget Appearance ─────────────────────────────────────────
 const WIDGET_APPEARANCE_DEFAULTS = {
   opacity: 100,
@@ -2683,6 +2709,25 @@ if (deleteThemeBtn) {
 renderThemePresets();
 applyAllWidgetAppearances();
 bindWidgetAppearanceControls();
+
+// ─── Preset Buttons ────────────────────────────────────────────────
+document.getElementById('widget-preset-row')?.querySelectorAll('.widget-preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.widget-preset-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const widgetId = document.getElementById('widget-custom-select')?.value;
+    if (!widgetId) return;
+    applyWidgetStylePreset(widgetId, btn.dataset.preset);
+    showToast(`Applied ${btn.dataset.preset} preset`);
+  });
+});
+
+document.getElementById('apply-preset-all-btn')?.addEventListener('click', () => {
+  const presetKey = document.querySelector('.widget-preset-btn.active')?.dataset.preset;
+  if (!presetKey) { showToast('Select a preset first'); return; }
+  WIDGETS.forEach(id => applyWidgetStylePreset(id, presetKey));
+  showToast(`Applied ${presetKey} to all widgets`);
+});
 
 const backdrop = document.getElementById('backdrop');
 let activePanel = null;
