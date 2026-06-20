@@ -4,6 +4,23 @@ const Store = {
   set: (key, val) => localStorage.setItem(key, JSON.stringify(val)),
 };
 
+// ─── Settings Migrations ────────────────────────────────────────────
+const SETTINGS_VERSION = 2;
+
+function migrateV1toV2() {
+  const bms = Store.get('bookmarks') ?? [];
+  const updated = bms.map(bm => bm.folderId ? bm : { ...bm, folderId: 'general' });
+  if (updated.some((bm, i) => bm !== bms[i])) Store.set('bookmarks', updated);
+}
+
+function runMigrations() {
+  const v = Store.get('settingsVersion') ?? 1;
+  if (v < 2) migrateV1toV2();
+  Store.set('settingsVersion', SETTINGS_VERSION);
+}
+
+runMigrations();
+
 // ─── Theme Accent ───────────────────────────────────────────────────
 const DEFAULT_ACCENT = '#c9a96e';
 
@@ -2202,6 +2219,7 @@ async function collectSettingsBackup() {
   return {
     app: 'Cenit New Tab',
     version: '1.2.0',
+    settingsVersion: SETTINGS_VERSION,
     exportedAt: new Date().toISOString(),
     storage,
     assets: {
