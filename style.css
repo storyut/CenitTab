@@ -1357,3 +1357,23 @@ body.layout-mode .widget:hover .widget-resize-handle { opacity: 1; }
   align-items: center !important;
   text-align: center;
 }
+
+/* ─── Import Preview Modal ──────────────────────────────────────────── */
+.import-preview-overlay {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+}
+.import-preview-overlay[hidden] { display: none; }
+.import-preview-modal {
+  background: rgba(22,20,35,0.97); border: 1px solid var(--glass-border);
+  border-radius: 16px; padding: 28px 32px; max-width: 380px; width: 90%;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+}
+.import-preview-title {
+  font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--accent); margin: 0 0 16px;
+}
+.import-preview-body { font-size: 13px; color: var(--text); margin-bottom: 20px; line-height: 1.7; }
+.import-preview-body .warn { color: #ffa726; }
+.import-preview-actions { display: flex; gap: 10px; }

@@ -2246,19 +2246,75 @@ async function downloadSettingsBackup() {
     showToast('Export failed');
   }
 }
-async function restoreSettingsBackup(text) {
-  let parsed;
-  try { parsed = JSON.parse(text); }
-  catch { showToast('Invalid backup file'); return; }
-  const storage = parsed?.storage && typeof parsed.storage === 'object' ? parsed.storage : parsed;
-  if (!storage || typeof storage !== 'object' || Array.isArray(storage)) {
-    showToast('Invalid backup file'); return;
+const KNOWN_KEYS = new Set([
+  'bookmarks','bookmarkFolders','activeBookmarkFolderId',
+  'notesList','notesMarkdown','activeNoteId',
+  'accentColor','overlayDarkness','bgBlur','bgPreset','bgPresetIndex',
+  'accentColorGlobal','clockFont','uiFont','customFonts',
+  'use12h','showAmPm','showGreeting','showDate','hideBrand',
+  'widgetPositions','widgetSizes','widgetVisibility','widgetAppearance',
+  'layoutProfiles','activeLayoutProfile',
+  'customThemes','activeThemeId',
+  'searchEngine','customBangs',
+  'recentCount','minimizedWidgets','widgetDockPosition',
+  'settingsVersion','notesList',
+]);
+
+function validateBackup(storage) {
+  const errors = [];
+  // Reject keys not in KNOWN_KEYS
+  for (const key of Object.keys(storage)) {
+    if (!KNOWN_KEYS.has(key)) errors.push(`Unknown key: "${key}"`);
   }
-  const ok = window.confirm('Importing will replace your current Cenit settings. Continue?');
-  if (!ok) return;
+  // Shape checks
+  if (storage.bookmarks !== undefined && !Array.isArray(storage.bookmarks))
+    errors.push('bookmarks must be an array');
+  if (storage.bookmarkFolders !== undefined && !Array.isArray(storage.bookmarkFolders))
+    errors.push('bookmarkFolders must be an array');
+  if (storage.notesList !== undefined && !Array.isArray(storage.notesList))
+    errors.push('notesList must be an array');
+  if (storage.customThemes !== undefined && !Array.isArray(storage.customThemes))
+    errors.push('customThemes must be an array');
+  if (storage.customFonts !== undefined && !Array.isArray(storage.customFonts))
+    errors.push('customFonts must be an array');
+
+  const version = storage.settingsVersion ?? 1;
+  const SETTINGS_VERSION = 2; // current
+  const summary = {
+    bookmarks: Array.isArray(storage.bookmarks) ? storage.bookmarks.length : 0,
+    notes: Array.isArray(storage.notesList) ? storage.notesList.length : 0,
+    themes: Array.isArray(storage.customThemes) ? storage.customThemes.length : 0,
+    version,
+    versionWarning: version > SETTINGS_VERSION,
+  };
+  return { valid: errors.length === 0, errors, summary };
+}
+
+let pendingImportStorage = null;
+let pendingImportAssets = null;
+
+function showImportPreview(storage, summary) {
+  pendingImportStorage = storage;
+  const body = document.getElementById('import-preview-body');
+  const overlay = document.getElementById('import-preview-overlay');
+  if (!body || !overlay) return;
+  const lines = [
+    `${summary.bookmarks} bookmark${summary.bookmarks !== 1 ? 's' : ''}`,
+    `${summary.notes} note${summary.notes !== 1 ? 's' : ''}`,
+    `${summary.themes} custom theme${summary.themes !== 1 ? 's' : ''}`,
+    `Backup version: ${summary.version}`,
+  ];
+  body.innerHTML = lines.map(l => `<div>${l}</div>`).join('');
+  if (summary.versionWarning) {
+    body.innerHTML += `<div class="warn">&#9888; This backup is from a newer version — some data may not import correctly.</div>`;
+  }
+  overlay.removeAttribute('hidden');
+}
+
+async function applyImportStorage(storage) {
   let preparedStorage;
   try {
-    preparedStorage = await prepareImportedBackgroundStorage(storage, parsed?.assets);
+    preparedStorage = await prepareImportedBackgroundStorage(storage, pendingImportAssets);
   } catch (err) {
     console.error('Import failed', err);
     showToast('Import failed');
@@ -2270,6 +2326,40 @@ async function restoreSettingsBackup(text) {
   });
   showToast('Settings imported');
   setTimeout(() => window.location.reload(), 350);
+}
+
+document.getElementById('import-confirm-btn')?.addEventListener('click', () => {
+  document.getElementById('import-preview-overlay')?.setAttribute('hidden', '');
+  if (!pendingImportStorage) return;
+  const storage = pendingImportStorage;
+  pendingImportStorage = null;
+  applyImportStorage(storage);
+});
+document.getElementById('import-cancel-btn')?.addEventListener('click', () => {
+  document.getElementById('import-preview-overlay')?.setAttribute('hidden', '');
+  pendingImportStorage = null;
+  pendingImportAssets = null;
+  showToast('Import cancelled');
+});
+
+async function restoreSettingsBackup(text) {
+  let parsed;
+  try { parsed = JSON.parse(text); }
+  catch { showToast('Invalid backup file — not valid JSON'); return; }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    showToast('Invalid backup file — unexpected format'); return;
+  }
+  const storage = parsed?.storage && typeof parsed.storage === 'object' ? parsed.storage : parsed;
+  if (!storage || typeof storage !== 'object' || Array.isArray(storage)) {
+    showToast('Invalid backup file — unexpected format'); return;
+  }
+  const { valid, errors, summary } = validateBackup(storage);
+  if (!valid) {
+    errors.forEach(e => showToast(e));
+    return;
+  }
+  pendingImportAssets = parsed?.assets ?? null;
+  showImportPreview(storage, summary);
 }
 if (exportSettingsBtn) exportSettingsBtn.addEventListener('click', downloadSettingsBackup);
 if (importSettingsBtn && importSettingsFile) {
