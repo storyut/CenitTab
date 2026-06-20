@@ -11,7 +11,7 @@ export const KNOWN_KEYS = new Set([
   'customThemes','activeThemeId',
   'searchEngine','customBangs',
   'recentCount','minimizedWidgets','widgetDockPosition',
-  'settingsVersion','notesList',
+  'settingsVersion',
 ]);
 
 export function validateBackup(storage) {
