@@ -455,7 +455,7 @@ document.addEventListener('drop', (e) => {
   e.preventDefault();
   const raw = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain')).trim();
   if (!raw || !looksLikeUrl(raw)) return;
-  const url = normalizeUrl(raw);
+  const url = normalizeBookmarkUrl(normalizeUrl(raw));
   const hostname = (() => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; } })();
   const bms = getBookmarks();
   bms.push({ name: hostname, url, folderId: getActiveBookmarkFolderId() });
@@ -1407,14 +1407,41 @@ function loadBookmarks() {
   });
 }
 
+const TRACKING_PARAMS = new Set([
+  'utm_source','utm_medium','utm_campaign','utm_term','utm_content',
+  'utm_id','utm_source_platform','utm_creative_format','utm_marketing_tactic',
+  'fbclid','gclid','dclid','msclkid','twclid','li_fat_id','mc_eid',
+  '_ga','_gl','ref','source',
+]);
+
+function normalizeBookmarkUrl(raw) {
+  let url;
+  try { url = new URL(raw.startsWith('http') ? raw : 'https://' + raw); }
+  catch { return raw; }
+  const toDelete = [...url.searchParams.keys()].filter(k => TRACKING_PARAMS.has(k));
+  toDelete.forEach(k => url.searchParams.delete(k));
+  return url.toString();
+}
+
+function isValidBookmarkUrl(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 document.getElementById('save-bm-btn').addEventListener('click', () => {
   const name = bmNameInput.value.trim();
   let url = bmUrlInput.value.trim();
   const folderId = bmFolderSelect?.value || DEFAULT_BOOKMARK_FOLDER_ID;
   if (!name || !url) return;
   if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  url = normalizeBookmarkUrl(url);
+  if (!isValidBookmarkUrl(url)) { showToast('Invalid URL'); return; }
   const bms = getBookmarks();
-  if (bms.some(b => b.url === url)) { showToast('Bookmark already exists'); return; }
+  if (bms.some(b => normalizeBookmarkUrl(b.url) === url)) { showToast('Bookmark already exists'); return; }
   bms.push({ name, url, folderId });
   setBookmarks(bms);
   Store.set('activeBookmarkFolderId', folderId);
@@ -2257,7 +2284,7 @@ const KNOWN_KEYS = new Set([
   'customThemes','activeThemeId',
   'searchEngine','customBangs',
   'recentCount','minimizedWidgets','widgetDockPosition',
-  'settingsVersion','notesList',
+  'settingsVersion',
 ]);
 
 function validateBackup(storage) {
@@ -2355,7 +2382,7 @@ async function restoreSettingsBackup(text) {
   }
   const { valid, errors, summary } = validateBackup(storage);
   if (!valid) {
-    errors.forEach(e => showToast(e));
+    showToast(errors.length === 1 ? errors[0] : `Import failed: ${errors.length} validation errors — ${errors[0]}${errors.length > 1 ? ' (and more)' : ''}`);
     return;
   }
   pendingImportAssets = parsed?.assets ?? null;
