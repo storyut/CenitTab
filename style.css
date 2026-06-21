@@ -1389,3 +1389,18 @@ body.layout-mode .widget:hover .widget-resize-handle { opacity: 1; }
 .widget-preset-btn:hover, .widget-preset-btn.active {
   border-color: var(--accent); background: var(--accent-dim); color: var(--accent);
 }
+
+/* ── Settings sections ───────────────────────────────────── */
+.settings-section { border-bottom: 1px solid var(--glass-border); }
+.settings-section:last-child { border-bottom: none; }
+.settings-section-header {
+  display: flex; justify-content: space-between; align-items: center;
+  width: 100%; background: none; border: none;
+  padding: 14px 0 10px; cursor: pointer;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--accent); text-align: left;
+}
+.settings-section-header:hover { opacity: 0.8; }
+.settings-section-chevron { transition: transform 0.2s; font-size: 13px; }
+.settings-section[data-collapsed] .settings-section-chevron { transform: rotate(-90deg); }
+.settings-section[data-collapsed] .settings-section-body { display: none; }

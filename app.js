@@ -816,7 +816,11 @@ function initSettingsSearch() {
   input.addEventListener('input', () => {
     const q = input.value.trim().toLowerCase();
     const all = [...body.children].filter(el => el !== input);
-    if (!q) { all.forEach(el => el.style.display = ''); return; }
+    if (!q) {
+      all.forEach(el => el.style.display = '');
+      document.querySelectorAll('.settings-section').forEach(s => s.style.display = '');
+      return;
+    }
     let sections = [], cur = null;
     all.forEach(el => {
       if (el.classList.contains('label')) {
@@ -840,6 +844,14 @@ function initSettingsSearch() {
       const before = sections.slice(0, i).filter(s => !s.divider);
       const after = sections.slice(i + 1).filter(s => !s.divider);
       sec.el.style.display = before.some(s => s.match) && after.some(s => s.match) ? '' : 'none';
+    });
+    // auto-expand sections that have matches
+    document.querySelectorAll('.settings-section').forEach(section => {
+      const sectionBody = section.querySelector('.settings-section-body');
+      if (!sectionBody) return;
+      const hasMatch = sectionBody.textContent.toLowerCase().includes(q);
+      section.style.display = hasMatch ? '' : 'none';
+      if (hasMatch) section.removeAttribute('data-collapsed');
     });
   });
 }
@@ -2781,3 +2793,21 @@ document.getElementById('reset-layout-default-btn')?.addEventListener('click', (
 });
 
 initSettingsSearch();
+
+function initSettingsSections() {
+  const collapsed = Store.get('settingsCollapsed') ?? {};
+  document.querySelectorAll('.settings-section').forEach(section => {
+    const key = section.dataset.section;
+    if (collapsed[key]) section.setAttribute('data-collapsed', '');
+    const header = section.querySelector('.settings-section-header');
+    header?.addEventListener('click', () => {
+      const isCollapsed = section.hasAttribute('data-collapsed');
+      if (isCollapsed) section.removeAttribute('data-collapsed');
+      else section.setAttribute('data-collapsed', '');
+      const state = Store.get('settingsCollapsed') ?? {};
+      state[key] = !isCollapsed;
+      Store.set('settingsCollapsed', state);
+    });
+  });
+}
+initSettingsSections();

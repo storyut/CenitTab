@@ -123,155 +123,200 @@
     </div>
     <div class="panel-body">
       <input class="input settings-search-input" id="settings-search-input" type="search" placeholder="Search settings…" autocomplete="off" spellcheck="false"/>
-      <p class="label">Theme Presets</p>
-      <div id="theme-preset-grid" class="theme-preset-grid"></div>
-      <input class="input" type="text" id="theme-name" placeholder="Custom theme name"/>
-      <button class="action-btn" id="save-theme-btn" type="button">Save Current Theme</button>
-      <button class="action-btn danger-action" id="delete-theme-btn" type="button">Delete Selected Custom Theme</button>
-      <p class="settings-help">Themes apply background, overlay, blur, accent color, clock font, and UI font.</p>
-      <div class="divider"></div>
-      <p class="label">Clock Font</p>
-      <select class="input select-input" id="clock-font-select"></select>
-      <p class="label" style="margin-top:4px">Custom Font URL (Google Fonts)</p>
-      <input class="input" type="text" id="custom-font-url" placeholder="Paste Google Fonts @import URL"/>
-      <input class="input" type="text" id="custom-font-name" placeholder="Font family name (e.g. Playfair Display)"/>
-      <button class="action-btn" id="apply-custom-font-btn">Apply Custom Font</button>
-      <p class="label" style="margin-top:20px">Imported Fonts</p>
-      <div id="custom-font-list" class="custom-font-list"></div>
-      <div class="divider"></div>
-      <p class="label">UI Font</p>
-      <select class="input select-input" id="ui-font-select"></select>
-      <div class="divider"></div>
-      <p class="label">Clock Format</p>
-      <div class="toggle-row">
-        <span class="toggle-label">24h</span>
-        <label class="toggle-switch"><input type="checkbox" id="toggle-12h"/><span class="toggle-slider"></span></label>
-        <span class="toggle-label">12h</span>
+
+      <div class="settings-section" data-section="appearance">
+        <button class="settings-section-header" type="button" aria-expanded="true">
+          <span>Appearance</span>
+          <span class="settings-section-chevron">▾</span>
+        </button>
+        <div class="settings-section-body">
+          <p class="label">Theme Presets</p>
+          <div id="theme-preset-grid" class="theme-preset-grid"></div>
+          <input class="input" type="text" id="theme-name" placeholder="Custom theme name"/>
+          <button class="action-btn" id="save-theme-btn" type="button">Save Current Theme</button>
+          <button class="action-btn danger-action" id="delete-theme-btn" type="button">Delete Selected Custom Theme</button>
+          <p class="settings-help">Themes apply background, overlay, blur, accent color, clock font, and UI font.</p>
+          <p class="label" style="margin-top:14px">Clock Font</p>
+          <select class="input select-input" id="clock-font-select"></select>
+          <p class="label" style="margin-top:4px">Custom Font URL (Google Fonts)</p>
+          <input class="input" type="text" id="custom-font-url" placeholder="Paste Google Fonts @import URL"/>
+          <input class="input" type="text" id="custom-font-name" placeholder="Font family name (e.g. Playfair Display)"/>
+          <button class="action-btn" id="apply-custom-font-btn">Apply Custom Font</button>
+          <p class="label" style="margin-top:20px">Imported Fonts</p>
+          <div id="custom-font-list" class="custom-font-list"></div>
+          <p class="label" style="margin-top:14px">UI Font</p>
+          <select class="input select-input" id="ui-font-select"></select>
+        </div>
       </div>
-      <div class="divider"></div>
-      <p class="label">Clock Details</p>
-      <div class="toggle-row">
-        <span class="toggle-label">Show Greeting</span>
-        <label class="toggle-switch"><input type="checkbox" id="toggle-greeting" checked/><span class="toggle-slider"></span></label>
+
+      <div class="settings-section" data-section="widgets">
+        <button class="settings-section-header" type="button" aria-expanded="true">
+          <span>Widgets</span>
+          <span class="settings-section-chevron">▾</span>
+        </button>
+        <div class="settings-section-body">
+          <p class="label">Clock Format</p>
+          <div class="toggle-row">
+            <span class="toggle-label">24h</span>
+            <label class="toggle-switch"><input type="checkbox" id="toggle-12h"/><span class="toggle-slider"></span></label>
+            <span class="toggle-label">12h</span>
+          </div>
+          <p class="label" style="margin-top:14px">Clock Details</p>
+          <div class="toggle-row">
+            <span class="toggle-label">Show Greeting</span>
+            <label class="toggle-switch"><input type="checkbox" id="toggle-greeting" checked/><span class="toggle-slider"></span></label>
+          </div>
+          <div class="toggle-row" style="margin-top:10px">
+            <span class="toggle-label">Show Date</span>
+            <label class="toggle-switch"><input type="checkbox" id="toggle-date" checked/><span class="toggle-slider"></span></label>
+          </div>
+          <div class="toggle-row" style="margin-top:10px">
+            <span class="toggle-label">Show AM/PM</span>
+            <label class="toggle-switch"><input type="checkbox" id="toggle-ampm" checked/><span class="toggle-slider"></span></label>
+          </div>
+          <p class="label" style="margin-top:14px">Widget Visibility</p>
+          <div class="toggle-row toggle-row-spread">
+            <span class="toggle-label">Clock</span>
+            <label class="toggle-switch"><input type="checkbox" id="toggle-widget-clock" checked/><span class="toggle-slider"></span></label>
+          </div>
+          <div class="toggle-row toggle-row-spread" style="margin-top:10px">
+            <span class="toggle-label">Search</span>
+            <label class="toggle-switch"><input type="checkbox" id="toggle-widget-search" checked/><span class="toggle-slider"></span></label>
+          </div>
+          <div class="toggle-row toggle-row-spread" style="margin-top:10px">
+            <span class="toggle-label">Bookmarks</span>
+            <label class="toggle-switch"><input type="checkbox" id="toggle-widget-bookmarks" checked/><span class="toggle-slider"></span></label>
+          </div>
+          <div class="toggle-row toggle-row-spread" style="margin-top:10px">
+            <span class="toggle-label">Recently Visited</span>
+            <label class="toggle-switch"><input type="checkbox" id="toggle-widget-recent" checked/><span class="toggle-slider"></span></label>
+          </div>
+          <div class="toggle-row toggle-row-spread" style="margin-top:10px">
+            <span class="toggle-label">Media</span>
+            <label class="toggle-switch"><input type="checkbox" id="toggle-widget-media" checked/><span class="toggle-slider"></span></label>
+          </div>
+          <div class="toggle-row toggle-row-spread" style="margin-top:10px">
+            <span class="toggle-label">Notes</span>
+            <label class="toggle-switch"><input type="checkbox" id="toggle-widget-notes" checked/><span class="toggle-slider"></span></label>
+          </div>
+          <p class="label" style="margin-top:14px">Widget Customization</p>
+          <select class="input select-input" id="widget-custom-select" aria-label="Choose widget to customize">
+            <option value="clock">Clock</option>
+            <option value="search">Search</option>
+            <option value="bookmarks">Bookmarks</option>
+            <option value="recent">Recently Visited</option>
+            <option value="media">Media</option>
+            <option value="notes">Notes</option>
+          </select>
+          <p class="settings-help">Customize each widget independently. Changes save automatically.</p>
+          <p class="label" style="margin-top:12px">Style Preset</p>
+          <div class="widget-preset-row" id="widget-preset-row">
+            <button class="widget-preset-btn" data-preset="glass" title="Glass">Glass</button>
+            <button class="widget-preset-btn" data-preset="compact" title="Compact">Compact</button>
+            <button class="widget-preset-btn" data-preset="plain" title="Plain">Plain</button>
+            <button class="widget-preset-btn" data-preset="terminal" title="Terminal">Terminal</button>
+            <button class="widget-preset-btn" data-preset="cardless" title="Cardless">Cardless</button>
+          </div>
+          <button class="action-btn secondary-action" id="apply-preset-all-btn" type="button">Apply to All Widgets</button>
+          <div class="widget-custom-grid">
+            <label class="widget-custom-field">
+              <span>Opacity <strong id="widget-opacity-val">100%</strong></span>
+              <input type="range" id="widget-opacity-range" min="20" max="100" value="100" class="slider"/>
+            </label>
+            <label class="widget-custom-field">
+              <span>Corner Radius <strong id="widget-radius-val">8px</strong></span>
+              <input type="range" id="widget-radius-range" min="0" max="40" value="8" class="slider"/>
+            </label>
+            <label class="widget-custom-field">
+              <span>Accent Color</span>
+              <input type="color" id="widget-accent-color" class="widget-color-input" value="#c9a96e"/>
+            </label>
+          </div>
+          <div class="toggle-row toggle-row-spread" style="margin-top:10px">
+            <span class="toggle-label">Glass Background</span>
+            <label class="toggle-switch"><input type="checkbox" id="widget-bg-toggle" checked/><span class="toggle-slider"></span></label>
+          </div>
+          <div class="toggle-row toggle-row-spread" style="margin-top:10px">
+            <span class="toggle-label">Border</span>
+            <label class="toggle-switch"><input type="checkbox" id="widget-border-toggle" checked/><span class="toggle-slider"></span></label>
+          </div>
+          <div class="toggle-row toggle-row-spread" style="margin-top:10px">
+            <span class="toggle-label">Widget Title</span>
+            <label class="toggle-switch"><input type="checkbox" id="widget-title-toggle" checked/><span class="toggle-slider"></span></label>
+          </div>
+          <button class="action-btn secondary-action" id="widget-reset-appearance-btn" type="button">Reset Selected Widget</button>
+        </div>
       </div>
-      <div class="toggle-row" style="margin-top:10px">
-        <span class="toggle-label">Show Date</span>
-        <label class="toggle-switch"><input type="checkbox" id="toggle-date" checked/><span class="toggle-slider"></span></label>
+
+      <div class="settings-section" data-section="search">
+        <button class="settings-section-header" type="button" aria-expanded="true">
+          <span>Search</span>
+          <span class="settings-section-chevron">▾</span>
+        </button>
+        <div class="settings-section-body">
+          <p class="label">Search Engine</p>
+          <select class="input select-input" id="search-engine-select">
+            <option value="google">Google</option>
+            <option value="duckduckgo">DuckDuckGo</option>
+            <option value="bing">Bing</option>
+            <option value="youtube">YouTube</option>
+            <option value="github">GitHub</option>
+            <option value="wikipedia">Wikipedia</option>
+          </select>
+          <p class="settings-help">Tip: use shortcuts like <strong>yt music</strong>, <strong>gh react</strong>, <strong>w javascript</strong>, or press <strong>/</strong> to focus search.</p>
+          <p class="label" style="margin-top:16px">Custom Search Bangs</p>
+          <div class="bang-add-row">
+            <input class="input" id="bang-key-input" placeholder="key (e.g. npm)" style="flex:0.4"/>
+            <input class="input" id="bang-url-input" placeholder="URL with %s" style="flex:1"/>
+          </div>
+          <button class="action-btn" id="add-bang-btn" type="button">Add Bang</button>
+          <div id="custom-bang-list"></div>
+          <p class="settings-help">Type <strong>npm react</strong> to search with your bang. URL must contain <strong>%s</strong>.</p>
+        </div>
       </div>
-      <div class="toggle-row" style="margin-top:10px">
-        <span class="toggle-label">Show AM/PM</span>
-        <label class="toggle-switch"><input type="checkbox" id="toggle-ampm" checked/><span class="toggle-slider"></span></label>
+
+      <div class="settings-section" data-section="layout">
+        <button class="settings-section-header" type="button" aria-expanded="true">
+          <span>Layout</span>
+          <span class="settings-section-chevron">▾</span>
+        </button>
+        <div class="settings-section-body">
+          <p class="label settings-help">Use the Layout panel (⊞) to manage widget positions and profiles.</p>
+        </div>
       </div>
-      <div class="divider"></div>
-      <p class="label">Widget Visibility</p>
-      <div class="toggle-row toggle-row-spread">
-        <span class="toggle-label">Clock</span>
-        <label class="toggle-switch"><input type="checkbox" id="toggle-widget-clock" checked/><span class="toggle-slider"></span></label>
+
+      <div class="settings-section" data-section="data">
+        <button class="settings-section-header" type="button" aria-expanded="true">
+          <span>Data</span>
+          <span class="settings-section-chevron">▾</span>
+        </button>
+        <div class="settings-section-body">
+          <p class="label">Backup &amp; Restore</p>
+          <button class="action-btn" id="export-settings-btn" type="button">Export Settings</button>
+          <button class="action-btn secondary-action" id="import-settings-btn" type="button">Import Settings</button>
+          <input type="file" id="import-settings-file" accept="application/json,.json" hidden/>
+          <p class="settings-help">Exports backgrounds, bookmarks, notes, widget positions, profiles, fonts, and preferences as a JSON backup.</p>
+          <p class="label" style="margin-top:14px">Recently Visited</p>
+          <input class="input" type="number" id="recent-count-input" min="1" max="12" value="5"/>
+        </div>
       </div>
-      <div class="toggle-row toggle-row-spread" style="margin-top:10px">
-        <span class="toggle-label">Search</span>
-        <label class="toggle-switch"><input type="checkbox" id="toggle-widget-search" checked/><span class="toggle-slider"></span></label>
+
+      <div class="settings-section" data-section="advanced">
+        <button class="settings-section-header" type="button" aria-expanded="true">
+          <span>Advanced</span>
+          <span class="settings-section-chevron">▾</span>
+        </button>
+        <div class="settings-section-body">
+          <p class="label">Font Preview</p>
+          <div id="font-preview" class="font-preview">The quick fox jumps</div>
+          <p class="label" style="margin-top:14px">Miscellaneous</p>
+          <div class="toggle-row">
+            <span class="toggle-label">Show Brand</span>
+            <label class="toggle-switch"><input type="checkbox" id="toggle-brand" checked/><span class="toggle-slider"></span></label>
+          </div>
+        </div>
       </div>
-      <div class="toggle-row toggle-row-spread" style="margin-top:10px">
-        <span class="toggle-label">Bookmarks</span>
-        <label class="toggle-switch"><input type="checkbox" id="toggle-widget-bookmarks" checked/><span class="toggle-slider"></span></label>
-      </div>
-      <div class="toggle-row toggle-row-spread" style="margin-top:10px">
-        <span class="toggle-label">Recently Visited</span>
-        <label class="toggle-switch"><input type="checkbox" id="toggle-widget-recent" checked/><span class="toggle-slider"></span></label>
-      </div>
-      <div class="toggle-row toggle-row-spread" style="margin-top:10px">
-        <span class="toggle-label">Media</span>
-        <label class="toggle-switch"><input type="checkbox" id="toggle-widget-media" checked/><span class="toggle-slider"></span></label>
-      </div>
-      <div class="toggle-row toggle-row-spread" style="margin-top:10px">
-        <span class="toggle-label">Notes</span>
-        <label class="toggle-switch"><input type="checkbox" id="toggle-widget-notes" checked/><span class="toggle-slider"></span></label>
-      </div>
-      <div class="divider"></div>
-      <p class="label">Widget Customization</p>
-      <select class="input select-input" id="widget-custom-select" aria-label="Choose widget to customize">
-        <option value="clock">Clock</option>
-        <option value="search">Search</option>
-        <option value="bookmarks">Bookmarks</option>
-        <option value="recent">Recently Visited</option>
-        <option value="media">Media</option>
-        <option value="notes">Notes</option>
-      </select>
-      <p class="settings-help">Customize each widget independently. Changes save automatically.</p>
-      <p class="label" style="margin-top:12px">Style Preset</p>
-      <div class="widget-preset-row" id="widget-preset-row">
-        <button class="widget-preset-btn" data-preset="glass" title="Glass">Glass</button>
-        <button class="widget-preset-btn" data-preset="compact" title="Compact">Compact</button>
-        <button class="widget-preset-btn" data-preset="plain" title="Plain">Plain</button>
-        <button class="widget-preset-btn" data-preset="terminal" title="Terminal">Terminal</button>
-        <button class="widget-preset-btn" data-preset="cardless" title="Cardless">Cardless</button>
-      </div>
-      <button class="action-btn secondary-action" id="apply-preset-all-btn" type="button">Apply to All Widgets</button>
-      <div class="widget-custom-grid">
-        <label class="widget-custom-field">
-          <span>Opacity <strong id="widget-opacity-val">100%</strong></span>
-          <input type="range" id="widget-opacity-range" min="20" max="100" value="100" class="slider"/>
-        </label>
-        <label class="widget-custom-field">
-          <span>Corner Radius <strong id="widget-radius-val">8px</strong></span>
-          <input type="range" id="widget-radius-range" min="0" max="40" value="8" class="slider"/>
-        </label>
-        <label class="widget-custom-field">
-          <span>Accent Color</span>
-          <input type="color" id="widget-accent-color" class="widget-color-input" value="#c9a96e"/>
-        </label>
-      </div>
-      <div class="toggle-row toggle-row-spread" style="margin-top:10px">
-        <span class="toggle-label">Glass Background</span>
-        <label class="toggle-switch"><input type="checkbox" id="widget-bg-toggle" checked/><span class="toggle-slider"></span></label>
-      </div>
-      <div class="toggle-row toggle-row-spread" style="margin-top:10px">
-        <span class="toggle-label">Border</span>
-        <label class="toggle-switch"><input type="checkbox" id="widget-border-toggle" checked/><span class="toggle-slider"></span></label>
-      </div>
-      <div class="toggle-row toggle-row-spread" style="margin-top:10px">
-        <span class="toggle-label">Widget Title</span>
-        <label class="toggle-switch"><input type="checkbox" id="widget-title-toggle" checked/><span class="toggle-slider"></span></label>
-      </div>
-      <button class="action-btn secondary-action" id="widget-reset-appearance-btn" type="button">Reset Selected Widget</button>
-      <div class="divider"></div>
-      <p class="label">Search</p>
-      <select class="input select-input" id="search-engine-select">
-        <option value="google">Google</option>
-        <option value="duckduckgo">DuckDuckGo</option>
-        <option value="bing">Bing</option>
-        <option value="youtube">YouTube</option>
-        <option value="github">GitHub</option>
-        <option value="wikipedia">Wikipedia</option>
-      </select>
-      <p class="settings-help">Tip: use shortcuts like <strong>yt music</strong>, <strong>gh react</strong>, <strong>w javascript</strong>, or press <strong>/</strong> to focus search.</p>
-      <p class="label" style="margin-top:16px">Custom Search Bangs</p>
-      <div class="bang-add-row">
-        <input class="input" id="bang-key-input" placeholder="key (e.g. npm)" style="flex:0.4"/>
-        <input class="input" id="bang-url-input" placeholder="URL with %s" style="flex:1"/>
-      </div>
-      <button class="action-btn" id="add-bang-btn" type="button">Add Bang</button>
-      <div id="custom-bang-list"></div>
-      <p class="settings-help">Type <strong>npm react</strong> to search with your bang. URL must contain <strong>%s</strong>.</p>
-      <div class="divider"></div>
-      <p class="label">Recently Visited</p>
-      <input class="input" type="number" id="recent-count-input" min="1" max="12" value="5"/>
-      <div class="divider"></div>
-      <p class="label">Font Preview</p>
-      <div id="font-preview" class="font-preview">The quick fox jumps</div>
-      <div class="divider"></div>
-      <p class="label">Miscellaneous</p>
-      <div class="toggle-row">
-        <span class="toggle-label">Show Brand</span>
-        <label class="toggle-switch"><input type="checkbox" id="toggle-brand" checked/><span class="toggle-slider"></span></label>
-      </div>
-      <div class="divider"></div>
-      <p class="label">Backup & Restore</p>
-      <button class="action-btn" id="export-settings-btn" type="button">Export Settings</button>
-      <button class="action-btn secondary-action" id="import-settings-btn" type="button">Import Settings</button>
-      <input type="file" id="import-settings-file" accept="application/json,.json" hidden/>
-      <p class="settings-help">Exports backgrounds, bookmarks, notes, widget positions, profiles, fonts, and preferences as a JSON backup.</p>
+
     </div>
   </aside>
 
