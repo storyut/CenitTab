@@ -2854,8 +2854,9 @@ function buildCmdItems(query) {
   });
   // Notes
   getNotes().forEach(note => {
-    if (!q || (note.title || '').toLowerCase().includes(q) || (note.body || '').toLowerCase().includes(q)) {
-      items.push({ icon: '✎', label: note.title || 'Untitled note', category: 'note', action: () => {
+    const noteLabel = note.title || 'Untitled note';
+    if (!q || noteLabel.toLowerCase().includes(q) || (note.body || '').toLowerCase().includes(q)) {
+      items.push({ icon: '✎', label: noteLabel, category: 'note', action: () => {
         Store.set('activeNoteId', note.id); renderActiveNote?.();
       }});
     }
@@ -2938,3 +2939,67 @@ document.addEventListener('keydown', e => {
     if (cmdOpen) closeCmdPalette(); else openCmdPalette();
   }
 });
+
+// ─── Widget Dock ─────────────────────────────────────────────────────
+const widgetDock = document.getElementById('widget-dock');
+const WIDGET_LABELS = { clock: '◷', search: '⌕', bookmarks: '☆', recent: '⟳', media: '♫', notes: '✎' };
+
+function getMinimizedWidgets() { return new Set(Store.get('minimizedWidgets') ?? []); }
+function setMinimizedWidgets(set) { Store.set('minimizedWidgets', [...set]); }
+
+function minimizeWidget(widgetId) {
+  const widget = document.getElementById(`widget-${widgetId}`);
+  if (!widget) return;
+  const minimized = getMinimizedWidgets();
+  minimized.add(widgetId);
+  setMinimizedWidgets(minimized);
+  widget.style.display = 'none';
+  renderWidgetDock();
+}
+
+function restoreWidget(widgetId) {
+  const widget = document.getElementById(`widget-${widgetId}`);
+  const minimized = getMinimizedWidgets();
+  minimized.delete(widgetId);
+  setMinimizedWidgets(minimized);
+  if (widget) widget.style.display = '';
+  renderWidgetDock();
+}
+
+function renderWidgetDock() {
+  if (!widgetDock) return;
+  const minimized = getMinimizedWidgets();
+  widgetDock.innerHTML = '';
+  if (!minimized.size) { widgetDock.setAttribute('hidden', ''); return; }
+  widgetDock.removeAttribute('hidden');
+  minimized.forEach(id => {
+    const btn = document.createElement('button');
+    btn.className = 'dock-icon';
+    btn.title = `Restore ${id}`;
+    btn.textContent = WIDGET_LABELS[id] ?? '⊞';
+    btn.addEventListener('click', () => restoreWidget(id));
+    widgetDock.appendChild(btn);
+  });
+}
+
+function addMinimizeButtons() {
+  document.querySelectorAll('.widget[data-widget]').forEach(widget => {
+    if (widget.querySelector('.widget-minimize-btn')) return;
+    const id = widget.dataset.widget;
+    const btn = document.createElement('button');
+    btn.className = 'widget-minimize-btn';
+    btn.title = 'Minimize';
+    btn.setAttribute('aria-label', `Minimize ${id} widget`);
+    btn.textContent = '−';
+    btn.addEventListener('click', (e) => { e.stopPropagation(); minimizeWidget(id); });
+    widget.appendChild(btn);
+  });
+}
+
+// Init: restore minimized state from storage
+renderWidgetDock();
+getMinimizedWidgets().forEach(id => {
+  const widget = document.getElementById(`widget-${id}`);
+  if (widget) widget.style.display = 'none';
+});
+addMinimizeButtons();
