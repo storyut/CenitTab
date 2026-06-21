@@ -2942,7 +2942,7 @@ document.addEventListener('keydown', e => {
 
 // ─── Widget Dock ─────────────────────────────────────────────────────
 const widgetDock = document.getElementById('widget-dock');
-const WIDGET_LABELS = { clock: '◷', search: '⌕', bookmarks: '☆', recent: '⟳', media: '♫', notes: '✎' };
+const DOCK_ICONS = { clock: '◷', search: '⌕', bookmarks: '☆', recent: '⟳', media: '♫', notes: '✎' };
 
 function getMinimizedWidgets() { return new Set(Store.get('minimizedWidgets') ?? []); }
 function setMinimizedWidgets(set) { Store.set('minimizedWidgets', [...set]); }
@@ -2976,7 +2976,7 @@ function renderWidgetDock() {
     const btn = document.createElement('button');
     btn.className = 'dock-icon';
     btn.title = `Restore ${id}`;
-    btn.textContent = WIDGET_LABELS[id] ?? '⊞';
+    btn.textContent = DOCK_ICONS[id] ?? '⊞';
     btn.addEventListener('click', () => restoreWidget(id));
     widgetDock.appendChild(btn);
   });
@@ -2997,6 +2997,9 @@ function addMinimizeButtons() {
 }
 
 // Init: restore minimized state from storage
+const savedDockPosition = Store.get('widgetDockPosition') ?? 'bottom-center';
+if (!Store.get('widgetDockPosition')) Store.set('widgetDockPosition', 'bottom-center');
+if (widgetDock) widgetDock.dataset.position = savedDockPosition;
 renderWidgetDock();
 getMinimizedWidgets().forEach(id => {
   const widget = document.getElementById(`widget-${id}`);
