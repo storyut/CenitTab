@@ -2344,7 +2344,6 @@ function validateBackup(storage) {
     errors.push('customFonts must be an array');
 
   const version = storage.settingsVersion ?? 1;
-  const SETTINGS_VERSION = 2; // current
   const summary = {
     bookmarks: Array.isArray(storage.bookmarks) ? storage.bookmarks.length : 0,
     notes: Array.isArray(storage.notesList) ? storage.notesList.length : 0,
@@ -2900,7 +2899,10 @@ function renderCmdResults(query) {
   items.forEach((item, i) => {
     const el = document.createElement('div');
     el.className = 'cmd-item'; el.setAttribute('role', 'option');
-    el.innerHTML = `<span class="cmd-item-icon">${item.icon}</span><span class="cmd-item-label">${item.label}</span><span class="cmd-item-category">${item.category}</span>`;
+    const iconEl = document.createElement('span'); iconEl.className = 'cmd-item-icon'; iconEl.textContent = item.icon;
+    const labelEl = document.createElement('span'); labelEl.className = 'cmd-item-label'; labelEl.textContent = item.label;
+    const catEl = document.createElement('span'); catEl.className = 'cmd-item-category'; catEl.textContent = item.category;
+    el.append(iconEl, labelEl, catEl);
     el.addEventListener('click', () => { item.action(); closeCmdPalette(); });
     el.addEventListener('mouseenter', () => setCmdActive(i));
     cmdResults.appendChild(el);

@@ -1,7 +1,7 @@
 export const TRACKING_PARAMS = new Set([
   'utm_source','utm_medium','utm_campaign','utm_term','utm_content',
   'utm_id','fbclid','gclid','dclid','msclkid',
-  '_ga','_gl',
+  '_ga','_gl','ref','source',
 ]);
 
 export function normalizeBookmarkUrl(raw) {
