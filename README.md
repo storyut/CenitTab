@@ -296,13 +296,34 @@ cenit-new-tab/
 ├── manifest.json
 ├── newtab.html
 ├── style.css
-├── app.js
-│
+├── src/
+│   ├── main.js              # Entry point + core orchestration
+│   ├── core/                # Pure logic shared by runtime + tests
+│   │   ├── migrations.js
+│   │   ├── import-validation.js
+│   │   ├── url-normalization.js
+│   │   ├── widget-presets.js
+│   │   ├── widget-dock.js
+│   │   ├── settings-sections.js
+│   │   └── command-palette.js
+│   ├── shared/              # Cross-cutting utilities
+│   │   ├── storage.js
+│   │   └── ui.js
+│   └── features/            # Self-contained feature modules
+│       ├── clock/clock.js
+│       ├── notes/notes.js
+│       ├── search/search.js
+│       ├── background/background.js
+│       ├── fonts/fonts.js
+│       └── bookmarks/bookmarks.js
+├── tests/
+│   ├── unit/                # Vitest unit tests
+│   ├── e2e/                 # Playwright end-to-end tests
+│   └── helpers/             # Re-exports from src/core (no duplication)
 ├── icons/
 │   ├── icon16.png
 │   ├── icon48.png
 │   └── icon128.png
-│
 └── README.md
 ```
 
@@ -320,15 +341,31 @@ cenit-new-tab/
 
 * HTML5
 * CSS3
-* Vanilla JavaScript
+* Vanilla JavaScript (ES Modules)
 
 ### Architecture
 
 * No frameworks
 * No build step
+* Modular ES module architecture (src/core, src/shared, src/features)
+* Single source of truth: runtime and tests share the same core modules
+* Dependency injection pattern for feature modules
 * Lightweight
 * Fast startup
 * Persistent local configuration
+
+---
+
+## 🧪 Testing
+
+```bash
+npm test          # Run unit tests (Vitest)
+npm run test:e2e  # Run end-to-end tests (Playwright)
+npm run test:all  # Run both
+```
+
+Unit tests import shared logic directly from `src/core/*`, ensuring runtime
+and tests never drift apart.
 
 ---
 
