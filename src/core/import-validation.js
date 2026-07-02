@@ -1,7 +1,7 @@
 import { SETTINGS_VERSION } from './migrations.js';
 
 export const KNOWN_KEYS = new Set([
-  'bookmarks', 'bookmarkFolders', 'activeBookmarkFolderId',
+  'bookmarks', 'bookmarkFolders', 'activeBookmarkFolderId', 'legacyBookmarksMode', 'bmManagerViewMode',
   'notesList', 'notesMarkdown', 'activeNoteId',
   'accentColor', 'overlayDarkness', 'bgBlur', 'bgPreset', 'bgPresetIndex',
   'accentColorGlobal', 'clockFont', 'uiFont', 'customFonts',

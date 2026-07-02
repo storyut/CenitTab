@@ -1,38 +1,28 @@
 /**
- * Bookmarks feature: folders, management UI, context menu, drag reorder.
+ * Bookmarks feature: legacy on-page widget + side panel, the new compact
+ * on-page launcher, and the new Bookmark Manager overlay. Legacy vs. new
+ * mode is controlled by the `legacyBookmarksMode` store flag (new is default).
  */
-import { normalizeBookmarkUrl, isValidBookmarkUrl } from '../../core/url-normalization.js';
+import { normalizeBookmarkUrl, isValidBookmarkUrl, getFaviconUrl } from '../../core/url-normalization.js';
+import {
+  DEFAULT_BOOKMARK_FOLDER_ID,
+  getBookmarkFolders, addBookmarkFolder, renameBookmarkFolder, deleteBookmarkFolder,
+  folderNameById, getActiveBookmarkFolderId, setActiveBookmarkFolderId,
+  getBookmarks, setBookmarks, addBookmark, updateBookmark,
+  moveToTrash, restoreFromTrash, moveBookmark,
+} from './bookmark-store.js';
+import { openBookmarkEditDialog, openTextPromptDialog, openConfirmDialog } from './bookmark-edit-dialog.js';
+import { initBookmarkManager } from './bookmark-manager.js';
 
-const DEFAULT_BOOKMARK_FOLDER_ID = 'folder_default';
 const PENCIL_SVG = `<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M11.5 1.5a2.121 2.121 0 0 1 3 3L5 14H2v-3L11.5 1.5z"/></svg>`;
-
-function getFavicon(url) {
-  try { return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=32`; } catch { return ''; }
-}
-
-function makeBookmarkFolder(name = 'General') {
-  return {
-    id: `folder_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    name: String(name || 'General').trim() || 'General',
-    createdAt: Date.now(),
-  };
-}
-
-function normalizeBookmarkFolder(folder, fallbackName = 'General') {
-  return {
-    id: folder?.id || makeBookmarkFolder(fallbackName).id,
-    name: String(folder?.name || fallbackName || 'General').trim() || 'General',
-    createdAt: Number(folder?.createdAt) || Date.now(),
-  };
-}
 
 /**
  * Initialize the bookmarks feature.
  * @param {object} deps - Dependencies
  * @param {object} deps.store - The Store object
  * @param {Function} deps.showToast - Toast notification function
- * @param {Function} deps.openPanel - Open panel callback
- * @returns {object} Bookmarks API: getBookmarks, setBookmarks, loadBookmarks, getActiveBookmarkFolderId
+ * @param {Function} deps.openPanel - Open panel callback (legacy side panel)
+ * @returns {object} Bookmarks API
  */
 export function initBookmarks(deps) {
   const { store, showToast, openPanel } = deps;
@@ -46,32 +36,29 @@ export function initBookmarks(deps) {
   const bmFolderList = document.getElementById('bm-folder-list');
   let bmCtxMenu = null;
 
+  function isLegacyMode() { return !!store.get('legacyBookmarksMode'); }
+
   function closeBmContextMenu() { bmCtxMenu?.remove(); bmCtxMenu = null; }
 
-  function showBmContextMenu(x, y, bm, idx) {
+  function showBmContextMenu(x, y, bm) {
     closeBmContextMenu();
     const menu = document.createElement('div');
     menu.className = 'bm-ctx-menu';
     const items = [
-      { label: 'Rename', action: () => {
-        const newName = window.prompt('Rename bookmark', bm.name)?.trim();
-        if (!newName) return;
-        const list = getBookmarks(); list[idx] = { ...list[idx], name: newName };
-        setBookmarks(list); loadBookmarks();
-      }},
-      { label: 'Edit URL', action: () => {
-        const newUrl = window.prompt('Edit URL', bm.url)?.trim();
-        if (!newUrl) return;
-        const list = getBookmarks(); list[idx] = { ...list[idx], url: newUrl };
-        setBookmarks(list); loadBookmarks();
-      }},
-      { label: 'Delete', danger: true, action: () => {
-        const list = getBookmarks(); const removed = list[idx];
-        list.splice(idx, 1); setBookmarks(list); loadBookmarks();
-        showToast(`Deleted: ${removed.name}`, () => {
-          const cur = getBookmarks(); cur.splice(idx, 0, removed); setBookmarks(cur); loadBookmarks();
+      { label: 'Edit', action: () => {
+        openBookmarkEditDialog({
+          mode: 'edit', bookmark: bm, folders: getBookmarkFolders(store),
+          onSave: ({ name, url, folderId }) => {
+            updateBookmark(store, bm.id, { name, url: normalizeBookmarkUrl(url), folderId });
+            loadBookmarks();
+          },
         });
-      }},
+      } },
+      { label: 'Delete', danger: true, action: () => {
+        moveToTrash(store, bm.id);
+        loadBookmarks();
+        showToast(`Deleted: ${bm.name}`, () => { restoreFromTrash(store, bm.id); loadBookmarks(); });
+      } },
     ];
     items.forEach(({ label, action, danger }) => {
       const btn = document.createElement('button');
@@ -86,63 +73,9 @@ export function initBookmarks(deps) {
     bmCtxMenu = menu;
   }
 
-  function getBookmarkFolders() {
-    let folders = store.get('bookmarkFolders');
-    if (!Array.isArray(folders) || !folders.length) {
-      folders = [{ id: DEFAULT_BOOKMARK_FOLDER_ID, name: 'General', createdAt: Date.now() }];
-      store.set('bookmarkFolders', folders);
-    }
-    const seen = new Set();
-    const normalized = folders.map((folder, index) => normalizeBookmarkFolder(folder, index === 0 ? 'General' : `Folder ${index + 1}`))
-      .filter(folder => {
-        if (seen.has(folder.id)) return false;
-        seen.add(folder.id);
-        return true;
-      });
-    if (!normalized.some(folder => folder.id === DEFAULT_BOOKMARK_FOLDER_ID)) {
-      normalized.unshift({ id: DEFAULT_BOOKMARK_FOLDER_ID, name: 'General', createdAt: Date.now() });
-    }
-    store.set('bookmarkFolders', normalized);
-    return normalized;
-  }
-
-  function setBookmarkFolders(folders) { store.set('bookmarkFolders', folders); }
-
-  function getBookmarks() {
-    const folders = getBookmarkFolders();
-    const validFolderIds = new Set(folders.map(folder => folder.id));
-    const bms = store.get('bookmarks') ?? [];
-    const normalized = (Array.isArray(bms) ? bms : []).map(bm => ({
-      name: String(bm?.name ?? '').trim(),
-      url: String(bm?.url ?? '').trim(),
-      folderId: validFolderIds.has(bm?.folderId) ? bm.folderId : DEFAULT_BOOKMARK_FOLDER_ID,
-    })).filter(bm => bm.name && bm.url);
-    store.set('bookmarks', normalized);
-    return normalized;
-  }
-
-  function setBookmarks(bookmarks) { store.set('bookmarks', bookmarks); }
-
-  function moveBookmark(fromIndex, toIndex) {
-    const list = getBookmarks();
-    if (fromIndex < 0 || fromIndex >= list.length || toIndex < 0 || toIndex >= list.length) return;
-    const [item] = list.splice(fromIndex, 1);
-    list.splice(toIndex, 0, item);
-    setBookmarks(list);
-  }
-
-  function folderNameById(folderId, folders = getBookmarkFolders()) {
-    return folders.find(folder => folder.id === folderId)?.name ?? 'General';
-  }
-
-  function getActiveBookmarkFolderId(folders = getBookmarkFolders()) {
-    const saved = store.get('activeBookmarkFolderId');
-    return folders.some(folder => folder.id === saved) ? saved : folders[0]?.id || DEFAULT_BOOKMARK_FOLDER_ID;
-  }
-
   function populateBookmarkFolderSelect(selectedId) {
     if (!bmFolderSelect) return;
-    const folders = getBookmarkFolders();
+    const folders = getBookmarkFolders(store);
     const current = selectedId || bmFolderSelect.value || store.get('activeBookmarkFolderId') || DEFAULT_BOOKMARK_FOLDER_ID;
     bmFolderSelect.innerHTML = '';
     folders.forEach(folder => {
@@ -171,29 +104,42 @@ export function initBookmarks(deps) {
       row.appendChild(name); row.appendChild(meta); row.appendChild(rename); row.appendChild(del);
       bmFolderList.appendChild(row);
       rename.addEventListener('click', () => {
-        const nextName = window.prompt('Rename folder', folder.name)?.trim();
-        if (!nextName) return;
-        const nextFolders = getBookmarkFolders().map(item => item.id === folder.id ? { ...item, name: nextName } : item);
-        setBookmarkFolders(nextFolders);
-        loadBookmarks();
+        openTextPromptDialog({
+          title: 'Rename Folder', value: folder.name, confirmLabel: 'Save',
+          onSave: (name) => { renameBookmarkFolder(store, folder.id, name); loadBookmarks(); },
+        });
       });
       del.addEventListener('click', () => {
         if (folder.id === DEFAULT_BOOKMARK_FOLDER_ID) return;
-        const ok = window.confirm(`Delete "${folder.name}"? Bookmarks in this folder will move to General.`);
-        if (!ok) return;
-        setBookmarkFolders(getBookmarkFolders().filter(item => item.id !== folder.id));
-        setBookmarks(getBookmarks().map(bm => bm.folderId === folder.id ? { ...bm, folderId: DEFAULT_BOOKMARK_FOLDER_ID } : bm));
-        loadBookmarks();
+        openConfirmDialog({
+          title: 'Delete Folder', confirmLabel: 'Delete', danger: true,
+          message: `Delete "${folder.name}"? Bookmarks in this folder will move to General.`,
+          onConfirm: () => { deleteBookmarkFolder(store, folder.id); loadBookmarks(); },
+        });
       });
     });
   }
 
-  function renderBookmarkWidget(bookmarks, folders) {
-    if (!bookmarkList) return;
-    bookmarkList.innerHTML = '';
-    if (bookmarkFolderTabs) bookmarkFolderTabs.innerHTML = '';
-    const activeFolderId = getActiveBookmarkFolderId(folders);
-    store.set('activeBookmarkFolderId', activeFolderId);
+  function renderBmPill(bm) {
+    const a = document.createElement('a');
+    a.className = 'bm-item'; a.href = bm.url; a.title = `${bm.name} · ${bm.url}`;
+    const fav = getFaviconUrl(bm.url);
+    if (fav) {
+      const img = document.createElement('img');
+      img.className = 'bm-favicon'; img.src = fav; img.onerror = () => img.remove();
+      a.appendChild(img);
+    }
+    a.appendChild(document.createTextNode(bm.name));
+    a.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showBmContextMenu(e.clientX, e.clientY, bm);
+    });
+    return a;
+  }
+
+  function renderBookmarkWidgetLegacy(bookmarks, folders) {
+    const activeFolderId = getActiveBookmarkFolderId(store, folders);
+    setActiveBookmarkFolderId(store, activeFolderId);
     const folderBar = bookmarkFolderTabs || document.createElement('div');
     folderBar.className = 'bm-widget-folder-tabs';
     folders.forEach(folder => {
@@ -206,9 +152,9 @@ export function initBookmarks(deps) {
       button.title = `${folder.name} · ${count} ${count === 1 ? 'bookmark' : 'bookmarks'}`;
       button.addEventListener('click', (e) => {
         e.preventDefault(); e.stopPropagation();
-        store.set('activeBookmarkFolderId', folder.id);
+        setActiveBookmarkFolderId(store, folder.id);
         populateBookmarkFolderSelect(folder.id);
-        renderBookmarkWidget(getBookmarks(), getBookmarkFolders());
+        renderBookmarkWidget(getBookmarks(store), getBookmarkFolders(store));
       });
       folderBar.appendChild(button);
     });
@@ -221,38 +167,50 @@ export function initBookmarks(deps) {
       bookmarkList.appendChild(empty);
       return;
     }
-    selectedBookmarks.forEach((bm) => {
-      const globalIdx = bookmarks.indexOf(bm);
-      const a = document.createElement('a');
-      a.className = 'bm-item'; a.href = bm.url; a.title = `${bm.name} · ${bm.url}`;
-      const fav = getFavicon(bm.url);
-      if (fav) {
-        const img = document.createElement('img');
-        img.className = 'bm-favicon'; img.src = fav; img.onerror = () => img.remove();
-        a.appendChild(img);
-      }
-      a.appendChild(document.createTextNode(bm.name));
-      a.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        showBmContextMenu(e.clientX, e.clientY, bm, globalIdx);
-      });
-      bookmarkList.appendChild(a);
-    });
+    selectedBookmarks.forEach((bm) => bookmarkList.appendChild(renderBmPill(bm)));
   }
 
-  function loadBookmarks() {
-    const folders = getBookmarkFolders();
-    const bms = getBookmarks();
-    if (bookmarkList) bookmarkList.innerHTML = '';
-    if (bmManageList) bmManageList.innerHTML = '';
-    populateBookmarkFolderSelect();
-    renderBookmarkFolders(folders, bms);
-    renderBookmarkWidget(bms, folders);
-    bms.forEach((bm, i) => {
-      if (!bmManageList) return;
+  function renderBookmarkLauncher(bookmarks, folders) {
+    const launcherBar = bookmarkFolderTabs || document.createElement('div');
+    launcherBar.className = 'bm-widget-folder-tabs';
+    const launcherBtn = document.createElement('button');
+    launcherBtn.type = 'button'; launcherBtn.className = 'bm-launcher-btn';
+    launcherBtn.title = 'Open Bookmark Manager';
+    launcherBtn.innerHTML = '<span class="bm-launcher-icon">\u2606</span><span>Bookmarks</span>';
+    launcherBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openBookmarkManager(); });
+    launcherBar.appendChild(launcherBtn);
+    if (!bookmarkFolderTabs) bookmarkList.appendChild(launcherBar);
+
+    let pills = bookmarks.filter(bm => bm.favorite);
+    if (!pills.length) {
+      const activeFolderId = getActiveBookmarkFolderId(store, folders);
+      pills = bookmarks.filter(bm => bm.folderId === activeFolderId).slice(0, 6);
+    }
+    if (!pills.length) {
+      const empty = document.createElement('div');
+      empty.className = 'bm-widget-empty';
+      empty.textContent = 'Star a bookmark in Manager to pin it here';
+      bookmarkList.appendChild(empty);
+      return;
+    }
+    pills.forEach((bm) => bookmarkList.appendChild(renderBmPill(bm)));
+  }
+
+  function renderBookmarkWidget(bookmarks, folders) {
+    if (!bookmarkList) return;
+    bookmarkList.innerHTML = '';
+    if (bookmarkFolderTabs) bookmarkFolderTabs.innerHTML = '';
+    if (isLegacyMode()) renderBookmarkWidgetLegacy(bookmarks, folders);
+    else renderBookmarkLauncher(bookmarks, folders);
+  }
+
+  function renderManageList(bookmarks, folders) {
+    if (!bmManageList) return;
+    bmManageList.innerHTML = '';
+    bookmarks.forEach((bm, i) => {
       const row = document.createElement('div');
       row.className = 'bm-row';
-      row.dataset.index = String(i);
+      row.dataset.id = bm.id;
       row.draggable = true;
       const header = document.createElement('div');
       header.className = 'bm-row-header';
@@ -263,10 +221,10 @@ export function initBookmarks(deps) {
       const collapsedName = document.createElement('span');
       collapsedName.className = 'bm-row-collapsed-name'; collapsedName.textContent = bm.name;
       const collapsedFolder = document.createElement('span');
-      collapsedFolder.className = 'bm-row-folder-name'; collapsedFolder.textContent = folderNameById(bm.folderId, folders);
+      collapsedFolder.className = 'bm-row-folder-name'; collapsedFolder.textContent = folderNameById(store, bm.folderId, folders);
       const del = document.createElement('button');
       del.className = 'bm-del'; del.textContent = '✕'; del.title = 'Delete';
-      header.appendChild(expandToggle); header.appendChild(orderBadge); header.appendChild(collapsedName); header.appendChild(collapsedFolder); header.appendChild(del);
+      header.append(expandToggle, orderBadge, collapsedName, collapsedFolder, del);
       const expandedWrap = document.createElement('div');
       expandedWrap.className = 'bm-row-expanded';
       const nameLabel = document.createElement('div'); nameLabel.className = 'bm-field-label'; nameLabel.textContent = 'Name';
@@ -278,15 +236,14 @@ export function initBookmarks(deps) {
       folders.forEach(folder => { const opt = document.createElement('option'); opt.value = folder.id; opt.textContent = folder.name; folderSelect.appendChild(opt); });
       folderSelect.value = bm.folderId;
       const applyBtn = document.createElement('button'); applyBtn.className = 'bm-apply-btn'; applyBtn.type = 'button'; applyBtn.textContent = 'Apply';
-      expandedWrap.appendChild(nameLabel); expandedWrap.appendChild(nameInput); expandedWrap.appendChild(urlLabel); expandedWrap.appendChild(urlInput); expandedWrap.appendChild(folderLabel); expandedWrap.appendChild(folderSelect); expandedWrap.appendChild(applyBtn);
-      row.appendChild(header); row.appendChild(expandedWrap);
+      expandedWrap.append(nameLabel, nameInput, urlLabel, urlInput, folderLabel, folderSelect, applyBtn);
+      row.append(header, expandedWrap);
       bmManageList.appendChild(row);
 
       function setExpanded(on) {
         row.classList.toggle('bm-row-expanded-state', on);
         if (on) {
-          const idx = +row.dataset.index;
-          const item = getBookmarks()[idx];
+          const item = getBookmarks(store).find(x => x.id === bm.id);
           nameInput.value = item?.name ?? bm.name;
           urlInput.value = item?.url ?? bm.url;
           folderSelect.value = item?.folderId ?? DEFAULT_BOOKMARK_FOLDER_ID;
@@ -295,37 +252,49 @@ export function initBookmarks(deps) {
       expandToggle.addEventListener('click', (e) => { e.stopPropagation(); setExpanded(!row.classList.contains('bm-row-expanded-state')); });
       del.addEventListener('click', (e) => {
         e.stopPropagation();
-        const list = getBookmarks(); const idx = +row.dataset.index; const removed = list[idx];
-        list.splice(idx, 1); setBookmarks(list); loadBookmarks();
-        showToast(`Deleted: ${removed.name}`, () => { const cur = getBookmarks(); cur.splice(idx, 0, removed); setBookmarks(cur); loadBookmarks(); });
+        moveToTrash(store, bm.id);
+        loadBookmarks();
+        showToast(`Deleted: ${bm.name}`, () => { restoreFromTrash(store, bm.id); loadBookmarks(); });
       });
       applyBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const idx = +row.dataset.index;
         const name = (nameInput.value || '').trim();
         let url = (urlInput.value || '').trim();
         const folderId = folderSelect.value || DEFAULT_BOOKMARK_FOLDER_ID;
         if (!name || !url) return;
         if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
-        const list = getBookmarks();
-        if (idx < 0 || idx >= list.length) return;
-        list[idx] = { name, url, folderId };
-        setBookmarks(list);
-        store.set('activeBookmarkFolderId', folderId);
+        updateBookmark(store, bm.id, { name, url, folderId });
+        setActiveBookmarkFolderId(store, folderId);
         loadBookmarks();
       });
-      row.addEventListener('dragstart', (e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(i)); row.classList.add('bm-row-dragging'); });
+      row.addEventListener('dragstart', (e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', bm.id); row.classList.add('bm-row-dragging'); });
       row.addEventListener('dragend', () => row.classList.remove('bm-row-dragging'));
       row.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
-      row.addEventListener('drop', (e) => { e.preventDefault(); const fromIndex = +(e.dataTransfer.getData('text/plain') || i); moveBookmark(fromIndex, +row.dataset.index); loadBookmarks(); });
+      row.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const fromId = e.dataTransfer.getData('text/plain') || bm.id;
+        moveBookmark(store, fromId, bm.id);
+        loadBookmarks();
+      });
     });
+  }
+
+  function loadBookmarks() {
+    const folders = getBookmarkFolders(store);
+    const bms = getBookmarks(store);
+    if (bookmarkList) bookmarkList.innerHTML = '';
+    if (bmManageList) bmManageList.innerHTML = '';
+    populateBookmarkFolderSelect();
+    renderBookmarkFolders(folders, bms);
+    renderBookmarkWidget(bms, folders);
+    renderManageList(bms, folders);
   }
 
   // Context menu dismiss
   document.addEventListener('click', () => closeBmContextMenu());
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeBmContextMenu(); });
 
-  // Save bookmark button
+  // Save bookmark button (legacy side panel add form)
   document.getElementById('save-bm-btn')?.addEventListener('click', () => {
     const name = bmNameInput?.value.trim();
     let url = bmUrlInput?.value.trim();
@@ -334,11 +303,9 @@ export function initBookmarks(deps) {
     if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
     url = normalizeBookmarkUrl(url);
     if (!isValidBookmarkUrl(url)) { showToast('Invalid URL'); return; }
-    const bms = getBookmarks();
-    if (bms.some(b => normalizeBookmarkUrl(b.url) === url)) { showToast('Bookmark already exists'); return; }
-    bms.push({ name, url, folderId });
-    setBookmarks(bms);
-    store.set('activeBookmarkFolderId', folderId);
+    if (getBookmarks(store).some(b => normalizeBookmarkUrl(b.url) === url)) { showToast('Bookmark already exists'); return; }
+    addBookmark(store, { name, url, folderId });
+    setActiveBookmarkFolderId(store, folderId);
     if (bmNameInput) bmNameInput.value = '';
     if (bmUrlInput) bmUrlInput.value = '';
     loadBookmarks();
@@ -347,17 +314,25 @@ export function initBookmarks(deps) {
   document.getElementById('add-bm-folder-btn')?.addEventListener('click', () => {
     const name = bmFolderNameInput?.value.trim();
     if (!name) return;
-    const folders = getBookmarkFolders();
-    const folder = makeBookmarkFolder(name);
-    folders.push(folder);
-    setBookmarkFolders(folders);
-    store.set('activeBookmarkFolderId', folder.id);
+    const folder = addBookmarkFolder(store, name);
+    setActiveBookmarkFolderId(store, folder.id);
     if (bmFolderNameInput) bmFolderNameInput.value = '';
     loadBookmarks();
   });
 
-  bmFolderSelect?.addEventListener('change', () => { store.set('activeBookmarkFolderId', bmFolderSelect.value); renderBookmarkWidget(getBookmarks(), getBookmarkFolders()); });
-  document.getElementById('add-bm-btn')?.addEventListener('click', () => openPanel?.('bookmark-panel'));
+  bmFolderSelect?.addEventListener('change', () => {
+    setActiveBookmarkFolderId(store, bmFolderSelect.value);
+    renderBookmarkWidget(getBookmarks(store), getBookmarkFolders(store));
+  });
+
+  document.getElementById('add-bm-btn')?.addEventListener('click', () => {
+    if (isLegacyMode()) openPanel?.('bookmark-panel');
+    else openBookmarkManager();
+  });
+
+  // New Bookmark Manager overlay (default UI)
+  const manager = initBookmarkManager({ store, showToast, onChange: loadBookmarks });
+  function openBookmarkManager(view) { manager.open(view); }
 
   // One-time repair
   if (!store.get('bookmarkFolderWidgetRepair_v5')) {
@@ -367,5 +342,15 @@ export function initBookmarks(deps) {
 
   loadBookmarks();
 
-  return { getBookmarks, setBookmarks, loadBookmarks, getActiveBookmarkFolderId, getBookmarkFolders };
+  return {
+    getBookmarks: () => getBookmarks(store),
+    setBookmarks: (bookmarks) => setBookmarks(store, bookmarks),
+    addBookmark: (bookmark) => { const added = addBookmark(store, bookmark); loadBookmarks(); return added; },
+    loadBookmarks,
+    getActiveBookmarkFolderId: () => getActiveBookmarkFolderId(store),
+    getBookmarkFolders: () => getBookmarkFolders(store),
+    openBookmarkManager,
+    isLegacyMode,
+    setLegacyMode: (on) => { store.set('legacyBookmarksMode', !!on); loadBookmarks(); },
+  };
 }

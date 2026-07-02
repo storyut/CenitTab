@@ -526,6 +526,13 @@ window.addEventListener('resize', () => {
 const panels = createPanelManager({
   updateLayoutRows, setLayoutMode, isLayoutMode,
   loadWidgetAppearanceControls,
+  onBookmarkButtonClick: () => {
+    if (bookmarksApi.isLegacyMode()) {
+      panels.getActivePanel() === 'bookmark-panel' ? panels.closePanel('bookmark-panel') : panels.openPanel('bookmark-panel');
+    } else {
+      bookmarksApi.openBookmarkManager();
+    }
+  },
 });
 
 // Background needs clearActiveTheme (defined later in themes) and URL drop handler.
@@ -540,10 +547,7 @@ const bg = initBackground({
     if (!raw || !looksLikeUrl(raw)) return;
     const url = normalizeBookmarkUrl(normalizeUrl(raw));
     const hostname = (() => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; } })();
-    const bms = bookmarksApi.getBookmarks();
-    bms.push({ name: hostname, url, folderId: bookmarksApi.getActiveBookmarkFolderId() });
-    bookmarksApi.setBookmarks(bms);
-    bookmarksApi.loadBookmarks();
+    bookmarksApi.addBookmark({ name: hostname, url, folderId: bookmarksApi.getActiveBookmarkFolderId() });
     showToast(`Bookmarked: ${hostname}`);
   },
 });
@@ -559,6 +563,15 @@ const searchApi = initSearch({ store: Store, showToast, isLayoutMode });
 
 // Bookmarks
 const bookmarksApi = initBookmarks({ store: Store, showToast, openPanel: panels.openPanel });
+
+const toggleLegacyBookmarks = document.getElementById('toggle-legacy-bookmarks');
+if (toggleLegacyBookmarks) {
+  toggleLegacyBookmarks.checked = bookmarksApi.isLegacyMode();
+  toggleLegacyBookmarks.addEventListener('change', () => {
+    bookmarksApi.setLegacyMode(toggleLegacyBookmarks.checked);
+    if (!toggleLegacyBookmarks.checked && panels.getActivePanel() === 'bookmark-panel') panels.closePanel('bookmark-panel');
+  });
+}
 
 // ─── Recently Visited Widget ────────────────────────────────────────
 const recentList = document.getElementById('recent-list');
@@ -983,7 +996,7 @@ function buildCmdItems(query) {
     'Open Settings': () => panels.openPanel('settings-panel'),
     'Open Layout': () => panels.openPanel('layout-panel'),
     'Open Background': () => panels.openPanel('bg-panel'),
-    'Open Bookmarks': () => panels.openPanel('bookmark-panel'),
+    'Open Bookmarks': () => { bookmarksApi.isLegacyMode() ? panels.openPanel('bookmark-panel') : bookmarksApi.openBookmarkManager(); },
     'New Note': () => { panels.openPanel('settings-panel'); notesApi.notesAddBtn?.click(); },
     'Reset Layout': () => { resetWidgetPositions(); showToast('Layout reset'); },
   };

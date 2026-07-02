@@ -188,6 +188,11 @@
             <label class="toggle-switch"><input type="checkbox" id="toggle-widget-bookmarks" checked/><span class="toggle-slider"></span></label>
           </div>
           <div class="toggle-row toggle-row-spread" style="margin-top:10px">
+            <span class="toggle-label">Use Legacy Bookmark Manager</span>
+            <label class="toggle-switch"><input type="checkbox" id="toggle-legacy-bookmarks"/><span class="toggle-slider"></span></label>
+          </div>
+          <p class="settings-help">Off by default: the header bookmark icon opens the new Bookmark Manager (Favorites, Trash, search, list/grid views). Turn this on to go back to the classic bookmark bar and side panel.</p>
+          <div class="toggle-row toggle-row-spread" style="margin-top:10px">
             <span class="toggle-label">Recently Visited</span>
             <label class="toggle-switch"><input type="checkbox" id="toggle-widget-recent" checked/><span class="toggle-slider"></span></label>
           </div>
@@ -388,6 +393,54 @@
     <div class="cmd-modal">
       <input id="cmd-input" class="cmd-input" type="text" placeholder="Search commands, bookmarks, notes…" autocomplete="off" spellcheck="false" aria-label="Command search"/>
       <div id="cmd-results" class="cmd-results" role="listbox"></div>
+    </div>
+  </div>
+
+  <div id="bookmark-manager-overlay" class="bm-manager-overlay" hidden aria-modal="true" role="dialog" aria-label="Bookmark manager">
+    <div class="bm-manager-backdrop" id="bm-manager-backdrop"></div>
+    <div class="bm-manager-modal">
+      <button type="button" class="bm-manager-close-btn" id="bm-manager-close-btn" title="Close">✕</button>
+      <aside class="bm-manager-sidebar">
+        <div class="bm-manager-sidebar-header">
+          <span class="bm-manager-sidebar-icon">🗂</span>
+          <span>Bookmarks</span>
+        </div>
+        <nav class="bm-manager-nav">
+          <button type="button" class="bm-manager-nav-item" id="bm-manager-nav-all" data-view="all">
+            <span class="bm-manager-nav-icon">☆</span><span class="bm-manager-nav-label">All Bookmarks</span>
+          </button>
+          <button type="button" class="bm-manager-nav-item" id="bm-manager-nav-favorites" data-view="favorites">
+            <span class="bm-manager-nav-icon">♡</span><span class="bm-manager-nav-label">Favorites</span>
+          </button>
+        </nav>
+        <div class="bm-manager-folder-tree" id="bm-manager-folder-tree"></div>
+        <div class="bm-manager-sidebar-footer">
+          <button type="button" class="bm-manager-nav-item bm-manager-trash-item" id="bm-manager-nav-trash" data-view="trash">
+            <span class="bm-manager-nav-icon">🗑</span><span class="bm-manager-nav-label">Trash</span>
+            <span class="bm-manager-nav-count" id="bm-manager-trash-count"></span>
+          </button>
+        </div>
+      </aside>
+      <section class="bm-manager-main">
+        <div class="bm-manager-toolbar">
+          <div class="bm-manager-toolbar-title">
+            <span id="bm-manager-view-icon" class="bm-manager-view-icon">🗂</span>
+            <span id="bm-manager-view-title" class="bm-manager-view-title">All Bookmarks</span>
+          </div>
+          <div class="bm-manager-toolbar-actions">
+            <button type="button" class="bm-manager-icon-btn" id="bm-manager-refresh-btn" title="Refresh">⟳</button>
+            <button type="button" class="bm-manager-icon-btn" id="bm-manager-view-list-btn" title="List view">☰</button>
+            <button type="button" class="bm-manager-icon-btn" id="bm-manager-view-grid-btn" title="Grid view">▦</button>
+            <div class="bm-manager-search">
+              <span class="bm-manager-search-icon">⌕</span>
+              <input type="search" id="bm-manager-search-input" class="bm-manager-search-input" placeholder="Search…" autocomplete="off" spellcheck="false" aria-label="Search bookmarks"/>
+            </div>
+            <button type="button" class="bm-manager-icon-btn" id="bm-manager-overflow-btn" title="More actions">⋮</button>
+          </div>
+        </div>
+        <div class="bm-manager-count" id="bm-manager-count"></div>
+        <div class="bm-manager-content" id="bm-manager-content"></div>
+      </section>
     </div>
   </div>
 

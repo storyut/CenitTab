@@ -91,8 +91,10 @@ export function createPanelManager(deps) {
   function initPanelButtons() {
     document.getElementById('bg-btn')?.addEventListener('click', () =>
       activePanel === 'bg-panel' ? closePanel('bg-panel') : openPanel('bg-panel'));
-    document.getElementById('bookmark-btn')?.addEventListener('click', () =>
-      activePanel === 'bookmark-panel' ? closePanel('bookmark-panel') : openPanel('bookmark-panel'));
+    document.getElementById('bookmark-btn')?.addEventListener('click', () => {
+      if (deps.onBookmarkButtonClick) { deps.onBookmarkButtonClick(); return; }
+      activePanel === 'bookmark-panel' ? closePanel('bookmark-panel') : openPanel('bookmark-panel');
+    });
     document.getElementById('settings-btn')?.addEventListener('click', () => {
       if (activePanel === 'settings-panel') closePanel('settings-panel');
       else { openPanel('settings-panel'); deps.loadWidgetAppearanceControls?.(); }

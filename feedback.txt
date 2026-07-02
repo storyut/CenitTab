@@ -1,0 +1,7 @@
+feedback
+---
+1. auto focus on the search widget so i can instantly search.
+2. add option to disable start-up animation like the fade in widgets.
+3. use custom scrollbar for command palette instead of default.
+4. add right click to add new category folder on the folder section in bookmark manager.
+5. from my experience, when a new tab opens it seems like it loads the default settings first and everything shows up at top left for a short amount of time, only then loads my layout. When in my vision it should not be the case and instantly loads my layout instead. Probably not a bug but it breaks the experience.
