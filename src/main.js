@@ -52,6 +52,7 @@ function applyAccentColor(color, persist = false) {
 }
 
 applyAccentColor(Store.get('accentColor') ?? DEFAULT_ACCENT);
+document.body.classList.toggle('no-startup-anim', !!Store.get('disableStartupAnimation'));
 
 // ─── Layout Mode State ──────────────────────────────────────────────
 let layoutMode = false;
@@ -513,6 +514,16 @@ const brandEl = document.querySelector('.brand');
 const toggleBrand = document.getElementById('toggle-brand');
 function applyBrandVisibility() { if (brandEl) brandEl.style.display = Store.get('hideBrand') ? 'none' : ''; }
 if (toggleBrand) { toggleBrand.checked = !Store.get('hideBrand'); applyBrandVisibility(); toggleBrand.addEventListener('change', () => { Store.set('hideBrand', !toggleBrand.checked); applyBrandVisibility(); }); }
+
+// ─── Startup Animation ────────────────────────────────────────────────
+const toggleDisableStartupAnim = document.getElementById('toggle-disable-startup-anim');
+if (toggleDisableStartupAnim) {
+  toggleDisableStartupAnim.checked = !!Store.get('disableStartupAnimation');
+  toggleDisableStartupAnim.addEventListener('change', () => {
+    Store.set('disableStartupAnimation', toggleDisableStartupAnim.checked);
+    document.body.classList.toggle('no-startup-anim', toggleDisableStartupAnim.checked);
+  });
+}
 
 // ─── Initialize Features (order matters for dependencies) ───────────
 loadWidgetPositions();
@@ -1092,3 +1103,10 @@ if (widgetDock) widgetDock.dataset.position = savedDockPosition;
 renderWidgetDock();
 getMinimizedWidgets().forEach(id => { const widget = document.getElementById(`widget-${id}`); if (widget) widget.style.display = 'none'; });
 addMinimizeButtons();
+
+// ─── Reveal ─────────────────────────────────────────────────────────
+// Everything above runs synchronously, so positions, sizes, appearances,
+// visibility, and minimized state are all settled before widgets are
+// ever shown — this avoids a flash of widgets at their default top-left
+// layout before the saved layout is applied.
+document.body.classList.remove('app-loading');

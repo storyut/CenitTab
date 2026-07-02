@@ -129,6 +129,11 @@ export function initSearch(deps) {
     });
   }
 
+  // Auto-focus the search input so users can start typing immediately.
+  if (searchInput && !isLayoutMode()) {
+    requestAnimationFrame(() => searchInput.focus());
+  }
+
   // Custom bangs
   document.getElementById('add-bang-btn')?.addEventListener('click', () => {
     const keyEl = document.getElementById('bang-key-input');

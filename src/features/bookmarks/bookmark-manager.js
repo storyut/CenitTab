@@ -400,6 +400,13 @@ export function initBookmarkManager(deps) {
     openDropdownMenu(Math.max(8, rect.right - 200), rect.bottom + 4, items);
   });
 
+  folderTreeEl.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    openDropdownMenu(e.clientX, e.clientY, [
+      { label: 'New Folder', action: openNewFolderDialog },
+    ]);
+  });
+
   closeBtn.addEventListener('click', close);
   backdrop.addEventListener('click', close);
 
